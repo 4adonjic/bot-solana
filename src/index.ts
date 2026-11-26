@@ -199,12 +199,12 @@ async function main(): Promise<void> {
                   mint: candidate.mint,
                   side: candidate.side,
                   tokenAmountRaw: candidate.tokenAmountRaw,
-                  quoteAmountRaw: candidate.quoteAmountRaw,
                   quoteMint: candidate.quoteMint,
-                  quoteDecimals: candidate.quoteDecimals,
-                  quoteSource: candidate.quoteSource,
-                  quoteAmountIsEstimate: candidate.quoteAmountIsEstimate,
                   observedAt,
+                  ...(candidate.quoteAmountRaw ? { quoteAmountRaw: candidate.quoteAmountRaw } : {}),
+                  ...(candidate.quoteDecimals === undefined ? {} : { quoteDecimals: candidate.quoteDecimals }),
+                  ...(candidate.quoteSource ? { quoteSource: candidate.quoteSource } : {}),
+                  ...(candidate.quoteAmountIsEstimate === undefined ? {} : { quoteAmountIsEstimate: candidate.quoteAmountIsEstimate }),
                   slot,
                 });
                 if (paperResult.executed) {
