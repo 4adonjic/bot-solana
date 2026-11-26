@@ -5,6 +5,7 @@ export interface TokenBalance {
   owner: string;
   programId: string;
   uiTokenAmount: {
+    /** Exact integer amount in the token's smallest unit. */
     amount: string;
     decimals: number;
     uiAmount: number;
@@ -28,6 +29,7 @@ export interface ParsedTransaction {
   blockTime?: number;
   preTokenBalances: TokenBalance[];
   postTokenBalances: TokenBalance[];
+  /** Top-level and inner instructions, normalized to program IDs. */
   innerInstructions: Instruction[];
 }
 
@@ -35,8 +37,13 @@ export interface ParsedTrade {
   signature: string;
   mint: string;
   side: Side;
+  /** UI token amount received when buying. */
   amountIn: number;
+  /** UI token amount spent when selling. */
   amountOut: number;
+  /** Exact integer token amount; this is authoritative for precision. */
+  tokenAmountRaw: string;
+  tokenDecimals: number;
   dexProgramId?: string;
   timestamp?: number;
 }
