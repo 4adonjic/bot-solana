@@ -10,6 +10,7 @@ import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
 import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
 import { WalletTradeStore } from "./brain/wallet-trade-store.js";
 import { calculateWalletPerformance } from "./brain/wallet-performance.js";
+import { rankWallets } from "./brain/wallet-ranking.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
@@ -85,15 +86,27 @@ async function main(): Promise<void> {
     await candidateStore.init();
     const tradeStore = new WalletTradeStore();
     await tradeStore.init();
-    const historicalPerformance = calculateWalletPerformance(tradeStore.list());
+    const refreshWalletRanking = (): void => {
+      const performance = calculateWalletPerformance(tradeStore.list());
+      const rankings = rankWallets(performance);
+      const eligible = rankings.filter((item) => item.eligible);
+      logger.info(
+        {
+          historicalTradesLoaded: tradeStore.count(),
+          performanceGroupsLoaded: performance.length,
+          walletsWithEnoughData: eligible.length,
+          topWallets: eligible.slice(0, 10),
+        },
+        "Classement des wallets (PnL brut, cotation séparée, échantillon minimum)",
+      );
+    };
     logger.info(
-      {
-        candidateWalletsLoaded: candidateStore.list().length,
-        historicalTradesLoaded: tradeStore.count(),
-        performanceGroupsLoaded: historicalPerformance.length,
-      },
-      "Registres persistants chargés (historique et performances calculées)",
+      { candidateWalletsLoaded: candidateStore.list().length, historicalTradesLoaded: tradeStore.count() },
+      "Registres persistants chargés",
     );
+    refreshWalletRanking();
+    let newTradesSinceRanking = 0;
+    const rankingRefreshInterval = 100;
 
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
       const candidates = await defaultDecoder.decodeWalletCandidates(signature);
@@ -113,6 +126,7 @@ async function main(): Promise<void> {
             tokenDecimals: candidate.tokenDecimals,
             observedAt,
             slot,
+            timestampIsEstimated: candidate.timestamp === undefined,
             ...(candidate.quoteAmountRaw ? { quoteAmountRaw: candidate.quoteAmountRaw } : {}),
             ...(candidate.quoteMint ? { quoteMint: candidate.quoteMint } : {}),
             ...(candidate.quoteDecimals === undefined ? {} : { quoteDecimals: candidate.quoteDecimals }),
@@ -120,6 +134,13 @@ async function main(): Promise<void> {
             ...(candidate.quoteAmountIsEstimate === undefined ? {} : { quoteAmountIsEstimate: candidate.quoteAmountIsEstimate }),
             ...(candidate.dexProgramId ? { dexProgramId: candidate.dexProgramId } : {}),
           });
+          if (historyResult.inserted) {
+            newTradesSinceRanking++;
+            if (newTradesSinceRanking >= rankingRefreshInterval) {
+              refreshWalletRanking();
+              newTradesSinceRanking = 0;
+            }
+          }
           const stored = await candidateStore.record({
             wallet: candidate.wallet,
             signature: candidate.signature,

@@ -98,3 +98,14 @@ test("keeps raw integer arithmetic above JavaScript safe integer range", () => {
   assert.ok(result);
   assert.equal(result.realizedPnlRaw, "9007199254740993000");
 });
+
+test("orders observations by Solana slot rather than callback arrival order", () => {
+  const result = calculateWalletPerformance([
+    trade("sell", "100", "1500", "2026-01-02T00:00:00.000Z", { slot: 200 }),
+    trade("buy", "100", "1000", "2026-01-01T00:00:00.000Z", { slot: 100 }),
+  ])[0];
+
+  assert.ok(result);
+  assert.equal(result.realizedPnlRaw, "500");
+  assert.equal(result.unmatchedSoldTokenRaw, "0");
+});
