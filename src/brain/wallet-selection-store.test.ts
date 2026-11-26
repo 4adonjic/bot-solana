@@ -25,7 +25,7 @@ test("persists selected wallets across store restarts", async () => {
   try {
     const first = new WalletSelectionStore({ filePath, now: () => time });
     await first.init();
-    await first.sync([ranking("WalletA", 88)]);
+    await first.sync([ranking("WalletA", 88)], [ranking("WalletA", 88)]);
     time = new Date("2026-01-02T00:00:00.000Z");
     const restarted = new WalletSelectionStore({ filePath, now: () => time });
     await restarted.init();
@@ -47,12 +47,12 @@ test("marks removed wallets inactive and counts a later re-selection", async () 
   try {
     const store = new WalletSelectionStore({ filePath, now: () => time });
     await store.init();
-    await store.sync([ranking("WalletA", 80)]);
+    await store.sync([ranking("WalletA", 80)], [ranking("WalletA", 80)]);
     time = new Date("2026-02-02T00:00:00.000Z");
-    await store.sync([]);
+    await store.sync([], []);
     assert.equal(store.list()[0]?.active, false);
     time = new Date("2026-02-03T00:00:00.000Z");
-    await store.sync([ranking("WalletA", 90)]);
+    await store.sync([ranking("WalletA", 90)], [ranking("WalletA", 90)]);
     assert.equal(store.list()[0]?.selectionCount, 2);
     assert.equal(store.list()[0]?.reliabilityScore, 90);
     assert.equal(store.list()[0]?.active, true);
