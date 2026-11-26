@@ -36,7 +36,7 @@ Projet initialisé, dépendances verrouillées, tsconfig strict, connexion RPC t
 - À tester encore avec une vraie connexion RPC et un wallet qui effectue une transaction. La reconnexion en cas de coupure réseau n'a pas encore été validée en conditions réelles.
 
 ## Module 2 – Décodeur (en cours)
-Branche actuelle : `feat/decoder-balance-diffs`.
+Branche actuelle : `feat/decoder-balance-diffs` (PR #2 ouverte). La CI valide `npm test`, `npm run typecheck` et `npm run build`.
 - Les soldes pré- et post-transaction sont agrégés par wallet + mint.
 - Les nouveaux comptes de tokens et les comptes fermés sont pris en compte grâce à l'union des soldes avant/après.
 - Les calculs de variation utilisent `BigInt` sur les montants bruts, sans calculer la différence à partir de `uiAmount`.
@@ -48,7 +48,7 @@ Branche actuelle : `feat/decoder-balance-diffs`.
 ### Limites à traiter avant tout copy-trading réel
 - Le décodeur générique ne sait pas toujours identifier le token principal d'un swap multi-actifs ; les transactions ambiguës sont volontairement écartées.
 - La liste des program IDs DEX doit être vérifiée auprès des sources officielles.
-- Ajouter des tests unitaires avec des transactions représentatives (achat, vente, compte token créé/fermé, plusieurs comptes pour un mint, transaction ambiguë).
+- Tests unitaires ajoutés dans `src/decoder/decoder.test.ts` : achat, vente totale, agrégation de plusieurs comptes, mouvements WSOL, ambiguïté, précision brute, wallet non surveillé et timestamp. Les 8 tests passent dans GitHub Actions.
 - Valider les résultats contre des transactions réelles avant de les utiliser pour prendre une décision.
 - `amountIn` / `amountOut` désignent actuellement la quantité du token suivi, pas la quantité de SOL ou de stablecoin dépensée/reçue.
 
