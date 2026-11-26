@@ -1,95 +1,92 @@
 import { ParsedTransaction, ParsedTrade, Side, TokenBalance } from "./types.js";
 import { logger } from "../core/logger.js";
 
-// Known DEX program IDs for lookup
+// Program IDs are used only as transaction labels. Their presence does not
+// prove that a wallet's token movement was a successful swap.
 export const DEX_PROGRAM_IDS: Record<string, string> = {
   RAYDIUM_AMM: "675kPX9MHTjS2zt1qfr1NiuGePZB1GyzhjFuytX5k2Ud",
   RAYDIUM_CLMM: "CAMMCzo55L8kZRZ2JBfzPk5Ycg8pt4BjyVJeXO1ZLVjM",
   PUMP_FUN: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
   JUPITER_V6: "JUP6LkbZBsp1EHb8ZBBkfCev5EwZ4f3iR1r7Z1yQz4T",
   METEORA: "MeteoraDydnn66p5yUa4Z8x7J3nE6vSgBQGZQa4xzV1T",
-} as const;
+};
 
-/**
- * Detect which DEX program was involved in the transaction.
- * Returns the program ID string if found, undefined otherwise.
- */
+const QUOTE_MINTS = new Set([
+  "So11111111111111111111111111111111111111112",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+]);
+
+/** Returns a known DEX program ID found in top-level or inner instructions. */
 export function detectDexProgram(tx: ParsedTransaction): string | undefined {
-  const knownIds = Object.values(DEX_PROGRAM_IDS);
-  for (const ix of tx.innerInstructions) {
-    if (knownIds.includes(ix.programId)) {
-      return ix.programId;
-    }
-  }
-  return undefined;
+  const knownIds = new Set(Object.values(DEX_PROGRAM_IDS));
+  return tx.innerInstructions.find((instruction) =>
+    knownIds.has(instruction.programId),
+  )?.programId;
 }
 
 /**
- * Parse a transaction to extract trade details based on DEX type.
- * Currently uses generic balance diff for all DEXs; future steps will add DEX-specific parsing.
+ * Generic balance-diff parser retained for callers that already have a
+ * normalized ParsedTransaction. It returns null rather than guessing when
+ * several non-quote tokens changed.
  */
 export function parseDexTrade(
   tx: ParsedTransaction,
   targetWallet: string,
 ): ParsedTrade | null {
-  const dexProgramId = detectDexProgram(tx);
-  if (!dexProgramId) {
-    logger.debug({ signature: tx.signature }, "No known DEX program detected in transaction");
+  const totals = new Map<
+    string,
+    { mint: string; decimals: number; before: bigint; after: bigint }
+  >();
+
+  const add = (balances: TokenBalance[], side: "before" | "after") => {
+    for (const balance of balances) {
+      if (balance.owner !== targetWallet) continue;
+
+      const current = totals.get(balance.mint) ?? {
+        mint: balance.mint,
+        decimals: balance.uiTokenAmount.decimals,
+        before: 0n,
+        after: 0n,
+      };
+
+      current[side] += BigInt(balance.uiTokenAmount.amount);
+      current.decimals = balance.uiTokenAmount.decimals;
+      totals.set(balance.mint, current);
+    }
+  };
+
+  add(tx.preTokenBalances, "before");
+  add(tx.postTokenBalances, "after");
+
+  const candidates = [...totals.values()]
+    .map((item) => ({ ...item, delta: item.after - item.before }))
+    .filter((item) => item.delta !== 0n && !QUOTE_MINTS.has(item.mint));
+
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) {
+    logger.debug(
+      { signature: tx.signature, mints: candidates.map((item) => item.mint) },
+      "Transaction ambiguë : plusieurs tokens non-quote ont changé",
+    );
     return null;
   }
 
-  // Group post balances by mint+owner for quick lookup
-  const postByKey = new Map<string, TokenBalance>();
-  for (const b of tx.postTokenBalances) {
-    postByKey.set(`${b.owner}|${b.mint}`, b);
-  }
+  const item = candidates[0];
+  const side: Side = item.delta > 0n ? "buy" : "sell";
+  const rawAmount = (item.delta > 0n ? item.delta : -item.delta).toString();
+  const uiAmount = Number(rawAmount) / 10 ** item.decimals;
 
-  for (const pre of tx.preTokenBalances) {
-    if (pre.owner !== targetWallet) continue;
-
-    const post = postByKey.get(`${pre.owner}|${pre.mint}`);
-    if (!post) {
-      // Sold all tokens (balance disappeared)
-      const amountOut = Number(pre.uiTokenAmount.uiAmount);
-      if (amountOut > 0) {
-        return buildTrade(tx, pre.mint, "sell", 0, amountOut, dexProgramId);
-      }
-      continue;
-    }
-
-    const preAmount = Number(pre.uiTokenAmount.uiAmount);
-    const postAmount = Number(post.uiTokenAmount.uiAmount);
-    const diff = postAmount - preAmount;
-
-    if (diff > 0) {
-      return buildTrade(tx, pre.mint, "buy", diff, 0, dexProgramId);
-    }
-    if (diff < 0) {
-      return buildTrade(tx, pre.mint, "sell", 0, -diff, dexProgramId);
-    }
-  }
-
-  logger.debug({ signature: tx.signature }, "No trade detected for target wallet");
-  return null;
-}
-
-function buildTrade(
-  tx: ParsedTransaction,
-  mint: string,
-  side: Side,
-  amountIn: number,
-  amountOut: number,
-  dexProgramId: string,
-): ParsedTrade {
-  const timestamp = tx.blockTime != null ? tx.blockTime * 1000 : 0;
+  if (!Number.isFinite(uiAmount)) return null;
 
   return {
     signature: tx.signature,
-    mint,
+    mint: item.mint,
     side,
-    amountIn,
-    amountOut,
-    dexProgramId,
-    timestamp,
-  } as ParsedTrade;
+    amountIn: side === "buy" ? uiAmount : 0,
+    amountOut: side === "sell" ? uiAmount : 0,
+    tokenAmountRaw: rawAmount,
+    tokenDecimals: item.decimals,
+    dexProgramId: detectDexProgram(tx),
+    timestamp: tx.blockTime == null ? undefined : tx.blockTime * 1000,
+  };
 }
