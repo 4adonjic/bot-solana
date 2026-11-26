@@ -12,6 +12,7 @@ import { WalletTradeStore } from "./brain/wallet-trade-store.js";
 import { calculateWalletPerformance } from "./brain/wallet-performance.js";
 import { rankWallets } from "./brain/wallet-ranking.js";
 import { selectWalletsForPaperTrading, walletSelectionKey } from "./brain/wallet-selection.js";
+import { WalletSelectionStore } from "./brain/wallet-selection-store.js";
 import { PaperTradingEngine } from "./brain/paper-trading.js";
 
 async function main(): Promise<void> {
@@ -88,6 +89,8 @@ async function main(): Promise<void> {
     await candidateStore.init();
     const tradeStore = new WalletTradeStore();
     await tradeStore.init();
+    const selectionStore = new WalletSelectionStore();
+    await selectionStore.init();
     const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
     let selectedWalletKeys = new Set<string>();
     if (paperEngine) {
@@ -107,12 +110,13 @@ async function main(): Promise<void> {
         "PAPER TRADING ACTIF : portefeuille fictif uniquement, aucune transaction blockchain ne sera envoyée",
       );
     }
-    const refreshWalletRanking = (): void => {
+    const refreshWalletRanking = async (): Promise<void> => {
       const performance = calculateWalletPerformance(tradeStore.list());
       const rankings = rankWallets(performance);
       const eligible = rankings.filter((item) => item.eligible);
       const selected = selectWalletsForPaperTrading(rankings);
       selectedWalletKeys = new Set(selected.map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
+      const persistentWatchlist = await selectionStore.sync(selected);
       logger.info(
         {
           historicalTradesLoaded: tradeStore.count(),
@@ -120,6 +124,7 @@ async function main(): Promise<void> {
           walletsWithEnoughData: eligible.length,
           topWallets: eligible.slice(0, 10),
           selectedForPaperTrading: selected,
+          persistentWatchlist,
         },
         "Classement des wallets et sélection automatique Paper Trading (score minimum 65, maximum 10)",
       );
@@ -128,7 +133,7 @@ async function main(): Promise<void> {
       { candidateWalletsLoaded: candidateStore.list().length, historicalTradesLoaded: tradeStore.count() },
       "Registres persistants chargés",
     );
-    refreshWalletRanking();
+    await refreshWalletRanking();
     let newTradesSinceRanking = 0;
     const rankingRefreshInterval = 100;
 
@@ -163,7 +168,7 @@ async function main(): Promise<void> {
           if (historyResult.inserted) {
             newTradesSinceRanking++;
             if (newTradesSinceRanking >= rankingRefreshInterval) {
-              refreshWalletRanking();
+              await refreshWalletRanking();
               newTradesSinceRanking = 0;
             }
           }
