@@ -24,8 +24,8 @@ solana-bot-trade/
 ├─ src/
 │  ├─ config/env.ts      (étape 1.2)
 │  ├─ core/logger.ts     (étape 1.2)
-│  ├─ radar/             (vide, étape 1.3)
-│  ├─ decoder/           (vide, Module 2)
+│  ├─ radar/radar.ts     (écoute WebSocket, étape 1.3 en cours)
+│  ├─ decoder/           (prototype présent, à fiabiliser – Module 2)
 │  ├─ brain/             (vide, Module 3)
 │  ├─ shadow/            (vide, Module 4)
 │  ├─ executor/          (vide, Module 5)
@@ -49,16 +49,14 @@ Projet initialisé, dépendances en versions exactes, tsconfig strict, connexion
 - `src/index.ts` utilise config + logger et affiche la connexion RPC.
 - Test OK : `cmd /c "npm run typecheck"` puis `cmd /c "npm run dev"`.
 
-## Étape en cours : 1.3 – Le radar (rien n'est encore écrit)
-Plan prévu :
-1. `src/core/types.ts` : interface `IngestionSource` (`start()`, `stop()`, événement `onTransactionSignature`) pour pouvoir ajouter plus tard une source gRPC Geyser sans toucher au reste.
-2. `src/radar/websocketIngestor.ts` : implémentation avec `connection.onLogs` (`logsSubscribe`) sur chaque wallet cible, avec :
-   - reconnexion automatique + resouscription explicite après coupure,
-   - ping / health-check (les WebSockets Solana coupent parfois sans prévenir),
-   - **backoff exponentiel** plafonné (~30 s), avec **nombre max de tentatives puis arrêt + log fatal** (option recommandée, à confirmer).
-3. Mise à jour de `src/index.ts` : démarrer le radar et logger les signatures détectées.
+## Étape en cours : 1.3 – Fiabilisation du radar WebSocket
+- `src/radar/radar.ts` existe déjà : il utilise `connection.onLogs` et surveille maintenant chaque wallet cible.
+- L'endpoint `RPC_WS_URL` est explicitement transmis à `Connection` via `wsEndpoint`.
+- Suppression de la fausse déconnexion toutes les 10 secondes. Le WebSocket de web3.js assure sa reconnexion interne ; le radar gère les échecs de création des abonnements avec un backoff exponentiel plafonné à 30 secondes.
+- `stop()` supprime les abonnements actifs.
+- À faire : vérifier le comportement de reconnexion en conditions réelles, ajouter éventuellement un health-check si les tests démontrent qu'il est nécessaire, puis valider `npm run typecheck` et `npm run build`.
 
-Test attendu : lancer `cmd /c "npm run dev"` et voir une signature apparaître quand un wallet cible transactionne.
+Important : la modification est sur la branche `fix/radar-websocket`, pas encore fusionnée dans `main`. Les tests n'ont pas encore été exécutés.
 
 ## Roadmap restante
 - Module 2 : décodeur (pre/postTokenBalances, innerInstructions, détection DEX : Raydium, Pump.fun, Jupiter, Meteora, achat/vente, mint, montants)
