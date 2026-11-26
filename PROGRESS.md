@@ -81,6 +81,14 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Le PnL calculé est brut : frais réseau, priority fees et autres coûts ne sont pas encore déduits.
 - Ce module est une brique de calcul testée, pas encore un historique persistant ni un classement de wallets.
 
+## Historique persistant des transactions candidates
+- La PR #16 ajoute `data/wallet-trades.jsonl`, un historique append-only des observations décodées.
+- Chaque entrée conserve wallet, signature, mint, sens, quantité brute, décimales, montant de cotation, source, statut estimé, slot et horodatage.
+- Les doublons wallet + signature + mint sont ignorés, y compris après redémarrage.
+- Le fichier est rechargé au démarrage et le calcul FIFO existant est relancé sur l'historique chargé.
+- La limite par défaut est de 100 000 transactions ; à capacité atteinte, les nouvelles écritures sont refusées explicitement au lieu de supprimer l'ancien historique.
+- Le stockage reste local dans `data/`, ignoré par Git. Seules les transactions observées après activation de la découverte seront ajoutées ; aucun historique antérieur n'est reconstitué automatiquement.
+
 ## Roadmap restante
 - Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
 - Ajouter un historique de performance fiable : coût d'entrée/sortie en SOL, frais, PnL réalisé/virtuel, drawdown et échantillon minimum.
