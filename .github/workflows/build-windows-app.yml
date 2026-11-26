@@ -1,0 +1,52 @@
+name: Build Windows desktop app
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "interface graphique/bot-gui/**"
+      - ".github/workflows/build-windows-app.yml"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows installer and portable app
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: interface graphique/bot-gui
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install desktop dependencies
+        run: npm install
+
+      - name: Run desktop data tests
+        run: npm test
+
+      - name: Build React and TypeScript interface
+        run: npm run build:web
+
+      - name: Package Windows application
+        run: npm run dist:win
+
+      - name: Upload Windows executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: solana-bot-windows
+          path: |
+            interface graphique/bot-gui/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
