@@ -34,6 +34,8 @@ export interface ParsedTransaction {
 }
 
 export interface ParsedTrade {
+  /** Wallet whose token balance changed. */
+  wallet: string;
   signature: string;
   mint: string;
   side: Side;

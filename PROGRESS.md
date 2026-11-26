@@ -40,8 +40,9 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Les variations utilisent `BigInt` sur les montants bruts ; le résultat expose `tokenAmountRaw` et `tokenDecimals`.
 - Les instructions de haut niveau et internes sont normalisées, y compris pour les transactions versionnées.
 - Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
-- Les tests du décodeur ont été validés en CI lors de la PR #2.
-- Limites : les swaps multi-actifs ambigus sont écartés ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
+- Les transactions ambiguës avec plusieurs tokens non-quote modifiés sont écartées.
+- La PR #11 ajoute `wallet` au trade décodé et un extracteur de variations non ambiguës pour tous les propriétaires présents dans une transaction. C'est une fondation pour la découverte automatique ; aucune découverte n'est encore activée dans le radar.
+- Limites : les mouvements de tokens ne prouvent pas à eux seuls un swap DEX ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
 ## Module 3 – Sécurité des tokens
 - Scoring heuristique sur 100 : autorités mint/freeze, liquidité, concentration des 10 plus gros détenteurs, nombre de détenteurs.
@@ -51,16 +52,19 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - `liquidity.ts` interroge l'API DEX Screener et conserve la plus grosse liquidité d'un pool Solana associé au mint (PR #6 fusionnée).
 - `security-pipeline.ts` rassemble les trois sources et journalise le résultat après le décodage (PR #7 fusionnée).
 - `security-cache.ts` met en cache les analyses par mint pendant 60 secondes, mutualise les appels simultanés et conserve au maximum 500 entrées (PR #8 fusionnée).
-- La PR #9 ajoute une limite de deux analyses simultanées pour des mints différents et une file d'attente maximale de 100 demandes. Les demandes au-delà de cette limite échouent proprement et sont journalisées par le radar.
+- La PR #9 ajoute une limite de deux analyses simultanées pour des mints différents et une file d'attente maximale de 100 demandes.
+- La PR #10 place le cache avant la file d'attente afin de mutualiser les demandes identiques avant qu'elles consomment une place.
 - Tests unitaires présents pour les calculs, les collecteurs, le cache et le limiteur de concurrence.
-- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; une première analyse d'un nouveau mint déclenche toujours les appels RPC/API. La file bornée évite une accumulation infinie, mais ses limites devront être ajustées selon le fournisseur RPC. Aucun achat réel n'est activé.
+- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; une première analyse d'un nouveau mint déclenche toujours les appels RPC/API. Aucun achat réel n'est activé.
 
 ## Roadmap restante
 - Module 3 : améliorer l'identification des coffres de pools et valider les métriques sur des mints/transactions réels.
+- Module 3 bis : construire une source de transactions DEX, enregistrer les wallets candidats, puis les classer sur une fenêtre d'observation avec PnL réalisé/virtuel, fréquence, pertes maximales et échantillon minimum. Ne pas ajouter automatiquement un wallet au copy-trading avant validation.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
 ## Consignes de travail
 - Une étape à la fois, expliquer le but avant les modifications.
 - Une commande à la fois ; attendre le résultat avant de poursuivre.
+- Ne jamais committer le fichier `.env` ni les clés RPC privées.
 - Ne jamais activer d'exécution réelle sans tests et sécurités validés.
