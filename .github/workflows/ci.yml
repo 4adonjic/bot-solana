@@ -25,6 +25,8 @@ jobs:
         run: npm ci
       - name: Decoder unit tests
         run: npm test
+      - name: GUI data adapter tests
+        run: node --test 'interface graphique/bot-gui/dashboard-data.test.cjs'
       - name: TypeScript typecheck
         run: npm run typecheck
       - name: Build
