@@ -14,7 +14,7 @@ const asset: PaperQuoteAsset = {
   mint: quoteMint,
   decimals: 6,
   initialBalanceRaw: initialBalance.toString(),
-  buySizeRaw: "10_000_000", // 10.00 USDC per simulated buy
+  buySizeRaw: "10000000", // 10.00 USDC per simulated buy
 };
 
 function trade(
