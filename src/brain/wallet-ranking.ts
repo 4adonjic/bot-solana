@@ -10,6 +10,8 @@ export interface WalletRanking {
   quoteMint: string;
   quoteDecimals: number;
   rank: number | null;
+  /** 0–100 heuristic score; null until the minimum sample is reached. */
+  reliabilityScore: number | null;
   eligible: boolean;
   status: "insufficient_sample" | "positive_history" | "negative_history" | "breakeven";
   matchedSellCount: number;
@@ -125,6 +127,15 @@ export function rankWallets(
       quoteMint: group.quoteMint,
       quoteDecimals: group.quoteDecimals,
       rank: null as number | null,
+      reliabilityScore: eligible
+        ? Math.round((
+            (Math.min(group.matchedSellCount / 30, 1) * 15) +
+            (winRatePercent * 0.25) +
+            (positiveDayRatePercent * 0.25) +
+            ((profitFactor === "∞" ? 100 : profitFactor === null ? 0 : Math.min(Number(profitFactor) / 3, 1) * 100) * 0.20) +
+            ((group.realizedPnl > 0n ? 100 : group.realizedPnl === 0n ? 50 : 0) * 0.15)
+          ) * 100) / 100
+        : null,
       eligible,
       status,
       matchedSellCount: group.matchedSellCount,
@@ -147,6 +158,9 @@ export function rankWallets(
 
   ranked.sort((a, b) => {
     if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    const scoreA = a.reliabilityScore ?? -1;
+    const scoreB = b.reliabilityScore ?? -1;
+    if (scoreA !== scoreB) return scoreB - scoreA;
     const pnlA = BigInt(a.realizedPnlRaw);
     const pnlB = BigInt(b.realizedPnlRaw);
     if (pnlA !== pnlB) return pnlA > pnlB ? -1 : 1;
