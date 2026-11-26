@@ -90,9 +90,13 @@ async function main(): Promise<void> {
     const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
     if (paperEngine) {
       await paperEngine.init();
+      const paperSnapshot = paperEngine.snapshot();
       logger.warn(
         {
-          initialBalances: { SOL: "1", USDC: "100" },
+          virtualBalancesRaw: paperSnapshot.balances,
+          openPositions: paperSnapshot.positions.length,
+          simulatedFills: paperSnapshot.fills.length,
+          defaultStartingBalances: { SOL: "1", USDC: "100" },
           fixedBuySizes: { SOL: "0.05", USDC: "5" },
           slippageBps: 50,
           feeBps: 10,
