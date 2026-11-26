@@ -4,9 +4,14 @@ import { logger } from "./core/logger.js";
 import { defaultRadar } from "./radar/radar.js";
 import { defaultDecoder } from "./decoder/decoder.js";
 import { analyzeTokenSecurity } from "./brain/security-pipeline.js";
+import { createSecurityAnalysisCache } from "./brain/security-cache.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
+  const analyzeCachedSecurity = createSecurityAnalysisCache(
+    (mint) => analyzeTokenSecurity(connection, mint),
+    { ttlMs: 60_000, maxEntries: 500 },
+  );
 
   const version = await connection.getVersion();
   logger.info(
@@ -35,7 +40,7 @@ async function main(): Promise<void> {
     );
 
     try {
-      const report = await analyzeTokenSecurity(connection, trade.mint);
+      const report = await analyzeCachedSecurity(trade.mint);
       logger.info(
         {
           mint: report.mint,
