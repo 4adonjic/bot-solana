@@ -17,6 +17,7 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 - `src/brain/security.ts` : scoring de sécurité.
 - `src/brain/security-onchain.ts` : lecture des autorités mint/freeze.
 - `src/brain/holder-stats.ts` : calcul et récupération RPC des métriques de détenteurs.
+- `src/brain/liquidity.ts` : collecte de liquidité USD via DEX Screener.
 - `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
@@ -43,12 +44,13 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Scoring heuristique sur 100 : autorités mint/freeze, liquidité, concentration des 10 plus gros détenteurs, nombre de détenteurs.
 - Décisions `allow`, `review`, `reject`. Les données manquantes ou invalides imposent au minimum une revue.
 - Les autorités mint/freeze sont récupérées par RPC dans `security-onchain.ts` (PR #4 fusionnée).
-- Nouvelle étape : `holder-stats.ts` récupère les comptes SPL Token et Token-2022, agrège leurs soldes par adresse propriétaire et calcule le nombre de propriétaires avec solde et la part cumulée des 10 plus gros.
-- Tests ajoutés pour l'agrégation et les entrées invalides.
-- Limites : la requête RPC peut être lourde ou limitée par le fournisseur ; les comptes de pools, coffres de programmes et exchanges peuvent compter comme propriétaires, ce qui fausse la concentration économique. Cette métrique reste indicative. La liquidité USD n'est pas encore collectée. Rien n'est encore branché automatiquement au radar ni à un achat.
+- Les statistiques de détenteurs sont récupérées dans `holder-stats.ts` : agrégation par propriétaire et part cumulée des 10 plus gros (PR #5 fusionnée).
+- Nouvelle étape : `liquidity.ts` interroge l'API DEX Screener, conserve la plus grosse liquidité de pool Solana associée au mint et ne somme pas plusieurs pools.
+- Tests ajoutés avec réponses API simulées ; une erreur API ou une donnée absente provoque une erreur, jamais une valeur zéro interprétée comme valide.
+- Limites : la liquidité affichée par un agrégateur reste indicative et peut évoluer rapidement. La collecte n'est pas encore branchée automatiquement au radar ni au scoring. Les coffres de pools peuvent fausser les statistiques de détenteurs. Aucun achat réel n'est activé.
 
 ## Roadmap restante
-- Module 3 : source fiable de liquidité USD, exclusions/étiquetage des coffres de pools, fraîcheur et validation des métriques, puis branchement contrôlé au scoring.
+- Module 3 : vérifier fraîcheur et fiabilité des métriques, exclure/étiqueter les coffres de pools, puis brancher les collecteurs au scoring de façon contrôlée.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
