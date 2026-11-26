@@ -184,6 +184,8 @@ async function main(): Promise<void> {
 
           if (paperEngine && historyResult.inserted && candidate.quoteMint) {
             const ranking = rankWallets(calculateWalletPerformance(tradeStore.list()));
+            const currentSelection = selectWalletsForPaperTrading(ranking);
+            selectedWalletKeys = new Set(currentSelection.map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
             const leader = ranking.find((item) =>
               item.wallet === candidate.wallet && item.quoteMint === candidate.quoteMint,
             );
