@@ -151,22 +151,9 @@ export class PaperTradingEngine {
 
   async processTrade(trade: PerformanceTrade): Promise<PaperTradeResult> {
     this.assertInitialized();
-    const operation = async (): Promise<PaperTradeResult> => this.applyTrade(trade);
-    let resolveResult: (result: PaperTradeResult) => void;
-    let rejectResult: (error: unknown) => void;
-    const resultPromise = new Promise<PaperTradeResult>((resolve, reject) => {
-      resolveResult = resolve;
-      rejectResult = reject;
-    });
-    const queued = this.queue.then(async () => {
-      try {
-        resolveResult(await operation());
-      } catch (error) {
-        rejectResult(error);
-      }
-    });
+    const queued = this.queue.then(() => this.applyTrade(trade));
     this.queue = queued.then(() => undefined, () => undefined);
-    return resultPromise;
+    return queued;
   }
 
   snapshot(): PaperTradingSnapshot {
