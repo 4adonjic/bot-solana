@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Bot Trade</title>
+<style>
+  body { margin:0; font-family:Segoe UI,sans-serif; background:#0f1117; color:#e6e6e6; padding:24px; }
+  h1 { margin:0 0 20px; font-size:22px; }
+  a { color:#6ea8fe; }
+  .cards { display:flex; gap:16px; margin-bottom:24px; }
+  .card { flex:1; background:#1a1d27; border-radius:10px; padding:16px; }
+  .card small { color:#8b90a0; }
+  .card .val { font-size:26px; margin-top:6px; }
+  .green { color:#3ddc84; } .red { color:#ff5c5c; }
+  table { width:100%; border-collapse:collapse; background:#1a1d27; border-radius:10px; }
+  th, td { padding:12px; text-align:left; border-bottom:1px solid #2a2e3d; }
+  th { color:#8b90a0; font-weight:normal; }
+</style>
+</head>
+<body>
+  <h1>Bot Trade - Dashboard</h1>
+  <p><a href="wallets.html">Wallets →</a></p>
+
+  <div class="cards">
+    <div class="card"><small>PnL total (simulé)</small><div class="val green" id="pnl">+0.00 SOL</div></div>
+    <div class="card"><small>Tokens détectés</small><div class="val" id="count">0</div></div>
+    <div class="card"><small>Tokens validés</small><div class="val" id="ok">0</div></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Token</th><th>Score sécurité</th><th>Statut</th><th>PnL</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+<script>
+  // Fausses données pour l'instant
+  const tokens = [
+    { name: 'BONKY',  score: 82, status: 'Validé', pnl: 0.45 },
+    { name: 'PEPSOL', score: 35, status: 'Rejeté', pnl: 0 },
+    { name: 'WIFCAT', score: 74, status: 'Validé', pnl: -0.12 },
+    { name: 'MOONX',  score: 91, status: 'Validé', pnl: 1.20 }
+  ];
+
+  const rows = document.getElementById('rows');
+  let total = 0, valides = 0;
+
+  tokens.forEach(t => {
+    total += t.pnl;
+    if (t.status === 'Validé') valides++;
+    const cls = t.pnl >= 0 ? 'green' : 'red';
+    rows.innerHTML += `<tr>
+      <td>${t.name}</td>
+      <td>${t.score}/100</td>
+      <td>${t.status}</td>
+      <td class="${cls}">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} SOL</td>
+    </tr>`;
+  });
+
+  document.getElementById('count').textContent = tokens.length;
+  document.getElementById('ok').textContent = valides;
+  document.getElementById('pnl').textContent = (total >= 0 ? '+' : '') + total.toFixed(2) + ' SOL';
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

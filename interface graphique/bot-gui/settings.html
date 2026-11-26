@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Bot Trade - Paramètres</title>
+<style>
+  body { margin:0; font-family:Segoe UI,sans-serif; background:#0f1117; color:#e6e6e6; padding:24px; }
+  h1 { margin:0 0 20px; font-size:22px; }
+  h2 { font-size:16px; color:#8b90a0; margin:28px 0 12px; font-weight:normal; }
+  a { color:#6ea8fe; }
+  .box { background:#1a1d27; border-radius:10px; padding:16px; max-width:500px; }
+  .row { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  input[type=number] { width:110px; padding:8px; background:#0f1117; border:1px solid #2a2e3d; border-radius:6px; color:#e6e6e6; }
+  select { padding:8px; background:#0f1117; border:1px solid #2a2e3d; border-radius:6px; color:#e6e6e6; }
+  button { padding:12px 20px; background:#3d6bff; border:none; border-radius:8px; color:white; cursor:pointer; font-size:14px; }
+  .msg { color:#3ddc84; margin-left:12px; }
+</style>
+</head>
+<body>
+  <h1>Paramètres</h1>
+  <a href="index.html">← Retour au dashboard</a>
+
+  <h2>Mode</h2>
+  <div class="box">
+    <div class="row">
+      <span>Mode du bot</span>
+      <select id="mode">
+        <option value="simulation">Simulation</option>
+        <option value="reel">Réel</option>
+      </select>
+    </div>
+  </div>
+
+  <h2>Limites de risque</h2>
+  <div class="box">
+    <div class="row"><span>Mise max par trade (SOL)</span><input type="number" id="maxTrade" step="0.01" min="0"></div>
+    <div class="row"><span>Perte max par jour (SOL)</span><input type="number" id="maxLoss" step="0.01" min="0"></div>
+    <div class="row"><span>Positions ouvertes max</span><input type="number" id="maxPos" step="1" min="1"></div>
+  </div>
+
+  <h2>Trading</h2>
+  <div class="box">
+    <div class="row"><span>Slippage max (%)</span><input type="number" id="slippage" step="0.1" min="0"></div>
+    <div class="row"><span>Take profit (%)</span><input type="number" id="tp" step="1" min="0"></div>
+    <div class="row"><span>Stop loss (%)</span><input type="number" id="sl" step="1" min="0"></div>
+    <div class="row"><span>Score sécurité minimum (/100)</span><input type="number" id="minScore" step="1" min="0" max="100"></div>
+  </div>
+
+  <br>
+  <button onclick="save()">Enregistrer</button><span class="msg" id="msg"></span>
+
+<script>
+  const defaults = { mode:'simulation', maxTrade:0.1, maxLoss:0.5, maxPos:3, slippage:5, tp:100, sl:30, minScore:70 };
+  const ids = Object.keys(defaults);
+
+  let current = { ...defaults };
+  try { current = { ...defaults, ...JSON.parse(localStorage.getItem('settings') || '{}') }; } catch (e) {}
+
+  ids.forEach(id => { document.getElementById(id).value = current[id]; });
+
+  function save() {
+    const s = {};
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      s[id] = el.type === 'number' ? Number(el.value) : el.value;
+    });
+    if (s.mode === 'reel' && !confirm('Passer en mode RÉEL ? Le bot utilisera de vrais fonds.')) {
+      document.getElementById('mode').value = 'simulation';
+      return;
+    }
+    try { localStorage.setItem('settings', JSON.stringify(s)); } catch (e) {}
+    const msg = document.getElementById('msg');
+    msg.textContent = 'Enregistré ✓';
+    setTimeout(() => msg.textContent = '', 2000);
+  }
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
