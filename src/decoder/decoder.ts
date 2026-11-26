@@ -153,7 +153,7 @@ export class TransactionDecoder {
 
     return {
       signature,
-      blockTime: tx.blockTime ?? undefined,
+      ...(tx.blockTime == null ? {} : { blockTime: tx.blockTime }),
       preTokenBalances,
       postTokenBalances,
       innerInstructions: [...topLevelInstructions, ...innerInstructions],
@@ -214,6 +214,8 @@ export class TransactionDecoder {
     }
 
     const candidate = candidates[0];
+    if (!candidate) return null;
+
     const isBuy = candidate.delta > 0n;
     const rawAmount = (isBuy ? candidate.delta : -candidate.delta).toString();
     const uiAmount =
@@ -235,8 +237,8 @@ export class TransactionDecoder {
       amountOut: isBuy ? 0 : uiAmount,
       tokenAmountRaw: rawAmount,
       tokenDecimals: candidate.decimals,
-      dexProgramId: detectDexProgram(tx),
-      timestamp: tx.blockTime == null ? undefined : tx.blockTime * 1000,
+      ...(detectDexProgram(tx) ? { dexProgramId: detectDexProgram(tx)! } : {}),
+      ...(tx.blockTime == null ? {} : { timestamp: tx.blockTime * 1000 }),
     };
   }
 
