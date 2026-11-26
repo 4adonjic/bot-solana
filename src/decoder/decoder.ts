@@ -36,8 +36,8 @@ interface MessageLike {
  * Fetches a transaction and detects a target wallet's net token balance change.
  *
  * The raw integer token amount is kept as a string to avoid losing precision.
- * amountIn/amountOut remain UI-unit numbers for compatibility with the rest
- * of the application; tokenAmountRaw is the exact value.
+ * Quote amounts are also kept in raw units. Native SOL quote amounts are
+ * estimates because rent and unrelated SOL transfers can affect wallet deltas.
  */
 export class TransactionDecoder {
   private readonly connection: Connection;
@@ -141,6 +141,19 @@ export class TransactionDecoder {
     ];
     const allKeys = [...staticKeys, ...loadedKeys];
 
+    const nativeBalanceChanges = allKeys.flatMap((key, index) => {
+      const preLamports = meta.preBalances[index];
+      const postLamports = meta.postBalances[index];
+      if (preLamports === undefined || postLamports === undefined) return [];
+      return [{
+        wallet: key.toBase58(),
+        preLamports: String(preLamports),
+        postLamports: String(postLamports),
+      }];
+    });
+
+    const feePayer = staticKeys[0]?.toBase58();
+
     const resolveProgramId = (instruction: CompiledInstructionLike): string => {
       if (instruction.programId) return instruction.programId.toBase58();
 
@@ -171,6 +184,9 @@ export class TransactionDecoder {
       ...(tx.blockTime == null ? {} : { blockTime: tx.blockTime }),
       preTokenBalances,
       postTokenBalances,
+      nativeBalanceChanges,
+      feeLamports: String(meta.fee),
+      ...(feePayer ? { feePayer } : {}),
       innerInstructions: [...topLevelInstructions, ...innerInstructions],
     };
   }

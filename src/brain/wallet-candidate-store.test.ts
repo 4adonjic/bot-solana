@@ -21,6 +21,11 @@ const observation = {
   mint: "MintA",
   side: "buy" as const,
   tokenAmountRaw: "500",
+  quoteAmountRaw: "250000000",
+  quoteMint: "So11111111111111111111111111111111111111112",
+  quoteDecimals: 9,
+  quoteSource: "token_balance" as const,
+  quoteAmountIsEstimate: false,
 };
 
 test("persists candidate observations and reloads them after restart", async () => {
@@ -34,6 +39,7 @@ test("persists candidate observations and reloads them after restart", async () 
     await restarted.init();
     assert.equal(restarted.get("WalletA")?.observationCount, 1);
     assert.equal(restarted.get("WalletA")?.recentObservations[0]?.signature, "SignatureA");
+    assert.equal(restarted.get("WalletA")?.recentObservations[0]?.quoteAmountRaw, "250000000");
   });
 });
 

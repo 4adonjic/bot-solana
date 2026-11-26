@@ -8,6 +8,11 @@ export interface WalletCandidateObservation {
   mint: string;
   side: "buy" | "sell";
   tokenAmountRaw: string;
+  quoteAmountRaw?: string;
+  quoteMint?: string;
+  quoteDecimals?: number;
+  quoteSource?: "token_balance" | "native_balance_estimate";
+  quoteAmountIsEstimate?: boolean;
   dexProgramId?: string;
 }
 
@@ -188,6 +193,13 @@ export class WalletCandidateStore {
     }
     if (observation.side !== "buy" && observation.side !== "sell") {
       throw new Error("side must be buy or sell");
+    }
+    if (observation.quoteAmountRaw !== undefined && !/^\d+$/.test(observation.quoteAmountRaw)) {
+      throw new Error("quoteAmountRaw must be a non-negative integer string");
+    }
+    if (observation.quoteDecimals !== undefined &&
+      (!Number.isInteger(observation.quoteDecimals) || observation.quoteDecimals < 0 || observation.quoteDecimals > 18)) {
+      throw new Error("quoteDecimals must be an integer between 0 and 18");
     }
   }
 
