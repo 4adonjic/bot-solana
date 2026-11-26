@@ -76,6 +76,7 @@ export function parseDexTrade(
   if (!Number.isFinite(uiAmount)) return null;
 
   return {
+    wallet: targetWallet,
     signature: tx.signature,
     mint: item.mint,
     side,
