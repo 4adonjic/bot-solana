@@ -1,13 +1,8 @@
 {
   "name": "bot-gui",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Console Electron en lecture seule pour le bot Solana",
   "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "build": "electron-builder --win portable"
-  },
-  "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
-  }
+  "scripts": { "start": "electron .", "test": "node --test dashboard-data.test.cjs", "build": "electron-builder --win portable" },
+  "devDependencies": { "electron": "^33.0.0", "electron-builder": "^25.0.0" }
 }
