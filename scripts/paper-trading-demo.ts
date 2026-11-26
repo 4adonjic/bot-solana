@@ -82,7 +82,7 @@ try {
   const pnl = finalBalance - initialBalance;
   console.log("\n=== BILAN ===");
   console.log("Solde final:", usdc(finalBalance));
-  console.log("Résultat simulé:", (pnl >= 0n ? "+" : "") + usdc(pnl));
+  console.log("Variation du solde disponible (hors valeur des tokens restants):", (pnl >= 0n ? "+" : "") + usdc(pnl));
   console.log("Tokens restants:", snapshot.positions[0]?.tokenAmountRaw ?? "0");
   console.log("Positions ouvertes:", snapshot.positions.length);
   console.log("Exécutions simulées:", snapshot.fills.length);
