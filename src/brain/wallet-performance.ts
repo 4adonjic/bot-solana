@@ -10,6 +10,10 @@ export interface PerformanceTrade {
   quoteSource?: "token_balance" | "native_balance_estimate";
   quoteAmountIsEstimate?: boolean;
   observedAt: string;
+  /** Solana slot gives a reliable transaction ordering across callback arrival times. */
+  slot?: number;
+  /** True when observedAt is the local detection time, not the transaction blockTime. */
+  timestampIsEstimated?: boolean;
 }
 
 export interface WalletPerformance {
@@ -20,6 +24,8 @@ export interface WalletPerformance {
   buyCount: number;
   sellCount: number;
   matchedSellCount: number;
+  profitableSellCount: number;
+  losingSellCount: number;
   boughtTokenRaw: string;
   soldTokenRaw: string;
   matchedSoldTokenRaw: string;
@@ -27,6 +33,8 @@ export interface WalletPerformance {
   openTokenRaw: string;
   openCostBasisRaw: string;
   realizedPnlRaw: string;
+  /** Daily realized PnL, keyed by UTC date; estimated timestamps are excluded. */
+  dailyRealizedPnlRaw: Record<string, string>;
   /** Gross PnL before network fees, priority fees, and other transaction costs. */
   pnlIsGross: true;
 }
@@ -44,27 +52,38 @@ interface MutablePerformance {
   buyCount: number;
   sellCount: number;
   matchedSellCount: number;
+  profitableSellCount: number;
+  losingSellCount: number;
   boughtToken: bigint;
   soldToken: bigint;
   matchedSoldToken: bigint;
   unmatchedSoldToken: bigint;
   realizedPnl: bigint;
+  dailyRealizedPnl: Map<string, bigint>;
   lots: Lot[];
 }
 
 /**
- * Calculates FIFO realized performance using only exact WSOL/USDC balance
+ * Calculates FIFO realized performance using only exact quote-token balance
  * movements. Estimated native-SOL amounts and incomplete observations are
  * excluded. Results are gross of network/priority fees.
  *
- * Input order is preserved: callers must provide observations chronologically.
+ * When slot metadata is available, observations are processed in slot order,
+ * not WebSocket callback arrival order. Same-slot input order is preserved.
  */
 export function calculateWalletPerformance(
   observations: readonly PerformanceTrade[],
 ): WalletPerformance[] {
+  const ordered = observations.map((trade, index) => ({ trade, index })).sort((a, b) => {
+    if (a.trade.slot !== undefined && b.trade.slot !== undefined) {
+      return a.trade.slot - b.trade.slot || a.index - b.index;
+    }
+    return Date.parse(a.trade.observedAt) - Date.parse(b.trade.observedAt) || a.index - b.index;
+  });
+
   const groups = new Map<string, MutablePerformance>();
 
-  for (const trade of observations) {
+  for (const { trade } of ordered) {
     if (
       !/^\d+$/.test(trade.tokenAmountRaw) ||
       !trade.quoteAmountRaw ||
@@ -95,11 +114,14 @@ export function calculateWalletPerformance(
         buyCount: 0,
         sellCount: 0,
         matchedSellCount: 0,
+        profitableSellCount: 0,
+        losingSellCount: 0,
         boughtToken: 0n,
         soldToken: 0n,
         matchedSoldToken: 0n,
         unmatchedSoldToken: 0n,
         realizedPnl: 0n,
+        dailyRealizedPnl: new Map(),
         lots: [],
       };
       groups.set(key, created);
@@ -139,9 +161,20 @@ export function calculateWalletPerformance(
       : (quoteAmount * matchedQuantity) / quantity;
 
     if (matchedQuantity > 0n) {
+      const matchedPnl = matchedProceeds - matchedCost;
       group.matchedSellCount++;
       group.matchedSoldToken += matchedQuantity;
-      group.realizedPnl += matchedProceeds - matchedCost;
+      group.realizedPnl += matchedPnl;
+      if (matchedPnl > 0n) group.profitableSellCount++;
+      if (matchedPnl < 0n) group.losingSellCount++;
+
+      if (trade.timestampIsEstimated !== true) {
+        const timestamp = Date.parse(trade.observedAt);
+        if (!Number.isNaN(timestamp)) {
+          const day = new Date(timestamp).toISOString().slice(0, 10);
+          group.dailyRealizedPnl.set(day, (group.dailyRealizedPnl.get(day) ?? 0n) + matchedPnl);
+        }
+      }
     }
     group.unmatchedSoldToken += remainingToMatch;
   }
@@ -157,6 +190,8 @@ export function calculateWalletPerformance(
       buyCount: group.buyCount,
       sellCount: group.sellCount,
       matchedSellCount: group.matchedSellCount,
+      profitableSellCount: group.profitableSellCount,
+      losingSellCount: group.losingSellCount,
       boughtTokenRaw: group.boughtToken.toString(),
       soldTokenRaw: group.soldToken.toString(),
       matchedSoldTokenRaw: group.matchedSoldToken.toString(),
@@ -164,6 +199,9 @@ export function calculateWalletPerformance(
       openTokenRaw: openToken.toString(),
       openCostBasisRaw: openCost.toString(),
       realizedPnlRaw: group.realizedPnl.toString(),
+      dailyRealizedPnlRaw: Object.fromEntries(
+        [...group.dailyRealizedPnl.entries()].map(([day, pnl]) => [day, pnl.toString()]),
+      ),
       pnlIsGross: true,
     };
   });
