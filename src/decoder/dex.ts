@@ -3,11 +3,17 @@ import { ParsedTransaction, ParsedTrade, Side, TokenBalance } from "./types.js";
 // Program IDs are used only as transaction labels. Their presence does not
 // prove that a wallet's token movement was a successful swap.
 export const DEX_PROGRAM_IDS: Record<string, string> = {
-  RAYDIUM_AMM: "675kPX9MHTjS2zt1qfr1NiuGePZB1GyzhjFuytX5k2Ud",
-  RAYDIUM_CLMM: "CAMMCzo55L8kZRZ2JBfzPk5Ycg8pt4BjyVJeXO1ZLVjM",
+  RAYDIUM_AMM_V4: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+  RAYDIUM_CPMM: "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+  RAYDIUM_CLMM: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+  RAYDIUM_LAUNCHLAB: "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj",
   PUMP_FUN: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
-  JUPITER_V6: "JUP6LkbZBsp1EHb8ZBBkfCev5EwZ4f3iR1r7Z1yQz4T",
-  METEORA: "MeteoraDydnn66p5yUa4Z8x7J3nE6vSgBQGZQa4xzV1T",
+  PUMP_SWAP: "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
+  METEORA_DLMM: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+  METEORA_DBC: "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+  METEORA_DAMM_V2: "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+  ORCA_WHIRLPOOLS: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+  JUPITER_V6: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
 };
 
 const QUOTE_MINTS = new Set([
