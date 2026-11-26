@@ -22,6 +22,8 @@ function trade(
   signature: string,
   tokenAmountRaw: string,
   quoteAmountRaw: string,
+  tokenBalanceBeforeRaw?: string,
+  tokenBalanceAfterRaw?: string,
 ): PerformanceTrade {
   return {
     wallet: leader,
@@ -29,6 +31,8 @@ function trade(
     mint: tokenMint,
     side,
     tokenAmountRaw,
+    ...(tokenBalanceBeforeRaw === undefined ? {} : { tokenBalanceBeforeRaw }),
+    ...(tokenBalanceAfterRaw === undefined ? {} : { tokenBalanceAfterRaw }),
     quoteAmountRaw,
     quoteMint,
     quoteDecimals: 6,
@@ -63,26 +67,27 @@ try {
   console.log("Budget:", usdc(buy.fill.quoteAmountRaw), "| Frais:", usdc(buy.fill.feeQuoteRaw));
   console.log("Solde après achat:", usdc(buy.balanceRaw));
 
-  console.log("\n[2/2] Le wallet fictif revend 1 000 tokens pour 6 USDC.");
-  console.log("Le moteur actuel ferme toute la position copiée lors d'un signal de vente.");
-  const sell = await engine.processTrade(trade("sell", "demo-sell-signature", "1000", "6000000"));
+  console.log("\n[2/2] Le wallet fictif revend 250 tokens sur ses 1 000 tokens (25%) pour 1,5 USDC.");
+  const sell = await engine.processTrade(trade("sell", "demo-sell-signature", "250", "1500000", "1000", "750"));
   assert.equal(sell.executed, true, "La simulation de vente doit réussir.");
   if (!sell.executed) throw new Error(sell.reason);
   console.log("Vente simulée:", sell.fill.tokenAmountRaw, "tokens");
   console.log("Produit net:", usdc(sell.fill.quoteAmountRaw), "| Frais:", usdc(sell.fill.feeQuoteRaw));
 
   const snapshot = engine.snapshot();
-  assert.equal(snapshot.positions.length, 0, "La position doit être clôturée.");
+  assert.equal(snapshot.positions.length, 1, "La vente partielle doit laisser une position ouverte.");
+  assert.equal(snapshot.positions[0]?.tokenAmountRaw, "1491", "25% de la position copiée doit être vendue.");
   assert.equal(snapshot.fills.length, 2, "Deux exécutions simulées sont attendues.");
   const finalBalance = BigInt(snapshot.balances[quoteMint] ?? "0");
   const pnl = finalBalance - initialBalance;
   console.log("\n=== BILAN ===");
   console.log("Solde final:", usdc(finalBalance));
   console.log("Résultat simulé:", (pnl >= 0n ? "+" : "") + usdc(pnl));
+  console.log("Tokens restants:", snapshot.positions[0]?.tokenAmountRaw ?? "0");
   console.log("Positions ouvertes:", snapshot.positions.length);
   console.log("Exécutions simulées:", snapshot.fills.length);
   console.log("Assertions: OK");
-  console.log("\nNote: prix source simplifié, frais réseau non inclus, vente totale de la position.");
+  console.log("\nNote: prix source simplifié (pas de cotation indépendante au moment de la copie), frais réseau non inclus.");
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
