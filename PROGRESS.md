@@ -73,6 +73,14 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Les montants bruts sont stockés sans perte de précision ; la source et le caractère estimé sont conservés dans le registre des candidats.
 - Cette étape ne calcule pas encore de prix fiable ni de PnL : il faudra confirmer les swaps, les frais, les mouvements de rent et les transactions réelles.
 
+## Module 4 – Comptabilité de performance FIFO (première brique)
+- La PR #15 ajoute un calcul pur de performance par wallet + token + actif de cotation.
+- Les achats et ventes sont rapprochés en FIFO avec des montants bruts `BigInt` ; les calculs évitent les pertes de précision.
+- Seuls les montants WSOL/USDC issus de variations de soldes de tokens, explicitement non estimés, sont pris en compte.
+- Les ventes sans achat correspondant connu sont marquées comme non rapprochées ; elles ne génèrent pas de profit fictif.
+- Le PnL calculé est brut : frais réseau, priority fees et autres coûts ne sont pas encore déduits.
+- Ce module est une brique de calcul testée, pas encore un historique persistant ni un classement de wallets.
+
 ## Roadmap restante
 - Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
 - Ajouter un historique de performance fiable : coût d'entrée/sortie en SOL, frais, PnL réalisé/virtuel, drawdown et échantillon minimum.
