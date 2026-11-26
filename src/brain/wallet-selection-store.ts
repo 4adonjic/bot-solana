@@ -86,15 +86,17 @@ export class WalletSelectionStore {
       const scoreHistory = latest?.reliabilityScore === null || latest?.reliabilityScore === undefined
         ? previous.scoreHistory
         : [...previous.scoreHistory, latest.reliabilityScore].slice(-SCORE_HISTORY_LIMIT);
-      const trend = this.calculateTrend(scoreHistory);
-      const declining = trend === "declining";
+      const trend = latest ? this.calculateTrend(scoreHistory) : previous.trend;
+      const active = selectedKeys.has(key) && trend !== "declining";
       this.wallets.set(key, {
         ...previous,
         ...(latest?.reliabilityScore === null || latest?.reliabilityScore === undefined
           ? {}
           : { reliabilityScore: latest.reliabilityScore }),
         ...(latest ? { scoreHistory, trend } : {}),
-        active: selectedKeys.has(key) && !declining,
+        lastSelectedAt: active ? now : previous.lastSelectedAt,
+        selectionCount: previous.selectionCount + (active && !previous.active ? 1 : 0),
+        active,
       });
     }
 
@@ -115,22 +117,7 @@ export class WalletSelectionStore {
       });
     }
 
-    // Count a new selection period only when a wallet returns after being inactive.
-    for (const item of selected) {
-      const key = this.keyOf(item.wallet, item.quoteMint);
-      const record = this.wallets.get(key);
-      if (!record) continue;
-      const wasPreviouslyActive = record.active;
-      const latest = rankingByKey.get(key);
-      if (latest?.reliabilityScore === null || latest?.reliabilityScore === undefined) continue;
-      const shouldBeActive = !this.isDeclining(record.scoreHistory);
-      this.wallets.set(key, {
-        ...record,
-        lastSelectedAt: now,
-        selectionCount: record.selectionCount + (wasPreviouslyActive ? 0 : 1),
-        active: shouldBeActive,
-      });
-    }
+
 
     await this.persist();
     return this.list();
