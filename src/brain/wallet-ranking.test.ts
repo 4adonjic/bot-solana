@@ -98,3 +98,26 @@ test("excludes estimated timestamps from active-day regularity", () => {
   assert.ok(ranking);
   assert.equal(ranking.activeDays, 1);
 });
+
+
+test("computes a bounded reliability score and leaves insufficient samples unscored", () => {
+  const trades: PerformanceTrade[] = [];
+  for (let index = 0; index < 10; index++) {
+    const day = index < 4 ? "01" : index < 7 ? "02" : "03";
+    trades.push(makeTrade("WalletScored", `Mint${index % 2}`, "buy", "100", `score-buy-${index}`, `2026-02-${day}T00:00:00.000Z`));
+    trades.push(makeTrade("WalletScored", `Mint${index % 2}`, "sell", index < 8 ? "120" : "80", `score-sell-${index}`, `2026-02-${day}T01:00:00.000Z`));
+  }
+  trades.push(makeTrade("WalletTooNew", "MintNew", "buy", "100", "tiny-buy", "2026-02-01T00:00:00.000Z"));
+  trades.push(makeTrade("WalletTooNew", "MintNew", "sell", "150", "tiny-sell", "2026-02-01T01:00:00.000Z"));
+
+  const rankings = rankWallets(calculateWalletPerformance(trades));
+  const scored = rankings.find((item) => item.wallet === "WalletScored");
+  const tooNew = rankings.find((item) => item.wallet === "WalletTooNew");
+
+  assert.ok(scored);
+  assert.equal(scored.eligible, true);
+  assert.ok(scored.reliabilityScore !== null);
+  assert.ok(scored.reliabilityScore >= 0 && scored.reliabilityScore <= 100);
+  assert.ok(tooNew);
+  assert.equal(tooNew.reliabilityScore, null);
+});
