@@ -7,6 +7,7 @@ import { defaultDecoder } from "./decoder/decoder.js";
 import { analyzeTokenSecurity } from "./brain/security-pipeline.js";
 import { createSecurityAnalysisCache } from "./brain/security-cache.js";
 import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
+import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
@@ -73,23 +74,48 @@ async function main(): Promise<void> {
   }
 
   if (config.enableDexDiscovery) {
+    const candidateStore = new WalletCandidateStore();
+    await candidateStore.init();
+    logger.info(
+      { candidateWalletsLoaded: candidateStore.list().length },
+      "Registre persistant des wallets candidats chargé",
+    );
+
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
       const candidates = await defaultDecoder.decodeWalletCandidates(signature);
       if (candidates.length === 0) return;
 
       for (const candidate of candidates) {
-        logger.info(
-          {
+        try {
+          const stored = await candidateStore.record({
             wallet: candidate.wallet,
             signature: candidate.signature,
             slot,
             mint: candidate.mint,
             side: candidate.side,
             tokenAmountRaw: candidate.tokenAmountRaw,
-            dexProgramId: candidate.dexProgramId,
-          },
-          "Wallet candidat détecté via le flux DEX (observation uniquement)",
-        );
+            ...(candidate.dexProgramId ? { dexProgramId: candidate.dexProgramId } : {}),
+          });
+
+          logger.info(
+            {
+              wallet: stored.wallet,
+              signature: candidate.signature,
+              slot,
+              mint: candidate.mint,
+              side: candidate.side,
+              observationCount: stored.observationCount,
+              firstSeenAt: stored.firstSeenAt,
+              lastSeenAt: stored.lastSeenAt,
+            },
+            "Wallet candidat enregistré (observation uniquement)",
+          );
+        } catch (error) {
+          logger.error(
+            { wallet: candidate.wallet, signature, error },
+            "Impossible d'enregistrer le wallet candidat",
+          );
+        }
       }
     });
 
