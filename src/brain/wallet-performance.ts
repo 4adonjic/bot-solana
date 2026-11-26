@@ -4,6 +4,9 @@ export interface PerformanceTrade {
   mint: string;
   side: "buy" | "sell";
   tokenAmountRaw: string;
+  /** Leader's aggregate token balance immediately before/after this trade, when known. */
+  tokenBalanceBeforeRaw?: string;
+  tokenBalanceAfterRaw?: string;
   quoteAmountRaw?: string;
   quoteMint?: string;
   quoteDecimals?: number;
