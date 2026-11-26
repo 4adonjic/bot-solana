@@ -8,6 +8,8 @@ import { analyzeTokenSecurity } from "./brain/security-pipeline.js";
 import { createSecurityAnalysisCache } from "./brain/security-cache.js";
 import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
 import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
+import { WalletTradeStore } from "./brain/wallet-trade-store.js";
+import { calculateWalletPerformance } from "./brain/wallet-performance.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
@@ -81,9 +83,16 @@ async function main(): Promise<void> {
   if (config.enableDexDiscovery) {
     const candidateStore = new WalletCandidateStore();
     await candidateStore.init();
+    const tradeStore = new WalletTradeStore();
+    await tradeStore.init();
+    const historicalPerformance = calculateWalletPerformance(tradeStore.list());
     logger.info(
-      { candidateWalletsLoaded: candidateStore.list().length },
-      "Registre persistant des wallets candidats chargé",
+      {
+        candidateWalletsLoaded: candidateStore.list().length,
+        historicalTradesLoaded: tradeStore.count(),
+        performanceGroupsLoaded: historicalPerformance.length,
+      },
+      "Registres persistants chargés (historique et performances calculées)",
     );
 
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
@@ -92,6 +101,25 @@ async function main(): Promise<void> {
 
       for (const candidate of candidates) {
         try {
+          const observedAt = candidate.timestamp === undefined
+            ? new Date().toISOString()
+            : new Date(candidate.timestamp * 1000).toISOString();
+          const historyResult = await tradeStore.record({
+            wallet: candidate.wallet,
+            signature: candidate.signature,
+            mint: candidate.mint,
+            side: candidate.side,
+            tokenAmountRaw: candidate.tokenAmountRaw,
+            tokenDecimals: candidate.tokenDecimals,
+            observedAt,
+            slot,
+            ...(candidate.quoteAmountRaw ? { quoteAmountRaw: candidate.quoteAmountRaw } : {}),
+            ...(candidate.quoteMint ? { quoteMint: candidate.quoteMint } : {}),
+            ...(candidate.quoteDecimals === undefined ? {} : { quoteDecimals: candidate.quoteDecimals }),
+            ...(candidate.quoteSource ? { quoteSource: candidate.quoteSource } : {}),
+            ...(candidate.quoteAmountIsEstimate === undefined ? {} : { quoteAmountIsEstimate: candidate.quoteAmountIsEstimate }),
+            ...(candidate.dexProgramId ? { dexProgramId: candidate.dexProgramId } : {}),
+          });
           const stored = await candidateStore.record({
             wallet: candidate.wallet,
             signature: candidate.signature,
@@ -120,6 +148,8 @@ async function main(): Promise<void> {
               quoteSource: candidate.quoteSource,
               quoteAmountIsEstimate: candidate.quoteAmountIsEstimate,
               observationCount: stored.observationCount,
+              historyInserted: historyResult.inserted,
+              historicalTradeCount: tradeStore.count(),
               firstSeenAt: stored.firstSeenAt,
               lastSeenAt: stored.lastSeenAt,
             },
