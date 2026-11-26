@@ -37,14 +37,16 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - À tester encore avec une vraie connexion RPC et un wallet qui effectue une transaction. La reconnexion en cas de coupure réseau n'a pas encore été validée en conditions réelles.
 
 ## Module 2 – Décodeur et découverte
-- Fusionné dans `main) via les PR #2 et #11.
+- Fusionné dans `main` via les PR #2 et #11.
 - Les soldes pré- et post-transaction sont agrégés par wallet + mint, y compris les comptes créés ou fermés.
 - Les variations utilisent `BigInt` sur les montants bruts ; le résultat expose `tokenAmountRaw` et `tokenDecimals`.
+- Les montants de cotation WSOL/USDC sont extraits des variations de soldes, avec montant brut et décimales.
+- Si aucun token de cotation ne bouge, le changement de solde SOL du wallet est utilisé en estimation après correction des frais de transaction. Le loyer/rent et les transferts SOL annexes peuvent encore fausser cette estimation.
+- Les montants de cotation dont le sens contredit l'achat/vente du token sont ignorés.
 - Les instructions de haut niveau et internes sont normalisées, y compris pour les transactions versionnées.
-- Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
 - Les transactions ambiguës avec plusieurs tokens non-quote modifiés sont écartées.
 - Le flux DEX optionnel (PR #12) repère les wallets inconnus qui présentent des variations de soldes dans des transactions touchant les programmes surveillés.
-- Limites : une transaction qui invoque un programme DEX n'est pas forcément un swap ; les variations de soldes restent des candidats heuristiques. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
+- Limite : une transaction qui invoque un programme DEX n'est pas forcément un swap ; la classification reste heuristique.
 
 ## Module 3 – Sécurité des tokens
 - Scoring heuristique sur 100 : autorités mint/freeze, liquidité, concentration des 10 plus gros détenteurs, nombre de détenteurs.
@@ -59,12 +61,17 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; aucune exécution réelle n'est activée.
 
 ## Module 3 bis – Registre des wallets candidats
-- La PR #13 ajoute un registre JSON persistant dans `data/wallet-candidates.json`, chargé au démarrage lorsque la découverte DEX est activée.
+- La PR #13 ajoute un registre JSON local dans `data/wallet-candidates.json`, chargé au démarrage lorsque la découverte DEX est activée.
 - Chaque wallet conserve ses dates de première/dernière détection, son nombre d'observations et ses transactions récentes.
 - Les observations répétées (même signature + mint pour le même wallet) sont dédupliquées.
 - Le nombre de wallets conservés, les observations récentes et les clés de déduplication sont bornés.
 - Le dossier `data/` est ignoré par Git : les données de fonctionnement ne sont pas envoyées au dépôt.
 - Ce registre ne calcule pas encore de PnL et ne qualifie pas les wallets de rentables.
+
+## Étape suivante – Montants de cotation
+- La PR #14 ajoute l'extraction des montants WSOL/USDC et une estimation SOL de secours.
+- Les montants bruts sont stockés sans perte de précision ; la source et le caractère estimé sont conservés dans le registre des candidats.
+- Cette étape ne calcule pas encore de prix fiable ni de PnL : il faudra confirmer les swaps, les frais, les mouvements de rent et les transactions réelles.
 
 ## Roadmap restante
 - Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
