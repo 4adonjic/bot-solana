@@ -12,7 +12,8 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 ## Arborescence
 - `src/config/env.ts` : validation Zod de la configuration.
 - `src/core/logger.ts` : logger Pino partagé.
-- `src/radar/radar.ts` : surveillance WebSocket des wallets.
+- `src/radar/radar.ts` : surveillance WebSocket des wallets configurés.
+- `src/radar/dex-radar.ts` : flux WebSocket optionnel des programmes DEX connus.
 - `src/decoder/` : récupération et décodage des transactions.
 - `src/brain/security.ts` : scoring de sécurité.
 - `src/brain/security-onchain.ts` : lecture des autorités mint/freeze.
@@ -41,7 +42,8 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Les instructions de haut niveau et internes sont normalisées, y compris pour les transactions versionnées.
 - Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
 - Les transactions ambiguës avec plusieurs tokens non-quote modifiés sont écartées.
-- La PR #11 ajoute `wallet` au trade décodé et un extracteur de variations non ambiguës pour tous les propriétaires présents dans une transaction. C'est une fondation pour la découverte automatique ; aucune découverte n'est encore activée dans le radar.
+- La PR #11 ajoute `wallet` au trade décodé et un extracteur de variations non ambiguës pour tous les propriétaires présents dans une transaction.
+- La branche de travail actuelle ajoute un flux WebSocket DEX activable avec `ENABLE_DEX_DISCOVERY=true`, et journalise les wallets candidats extraits des transactions DEX. Le flux est désactivé par défaut.
 - Limites : les mouvements de tokens ne prouvent pas à eux seuls un swap DEX ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
 ## Module 3 – Sécurité des tokens
@@ -59,7 +61,8 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 
 ## Roadmap restante
 - Module 3 : améliorer l'identification des coffres de pools et valider les métriques sur des mints/transactions réels.
-- Module 3 bis : construire une source de transactions DEX, enregistrer les wallets candidats, puis les classer sur une fenêtre d'observation avec PnL réalisé/virtuel, fréquence, pertes maximales et échantillon minimum. Ne pas ajouter automatiquement un wallet au copy-trading avant validation.
+- Module 3 bis : persister les wallets candidats, dédupliquer leurs observations sur la durée, puis les classer sur une fenêtre d'observation avec PnL réalisé/virtuel, fréquence, pertes maximales et échantillon minimum. Ne pas ajouter automatiquement un wallet au copy-trading avant validation.
+- Limites du flux DEX : l'écoute de programmes détecte des transactions qui les invoquent, pas uniquement des swaps ; les variations de soldes restent des candidats heuristiques. Vérifier la charge et les limites WebSocket du fournisseur RPC avant activation.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
