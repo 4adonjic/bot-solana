@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/decoder/decoder.test.ts src/brain/security.test.ts src/brain/security-onchain.test.ts src/brain/holder-stats.test.ts src/brain/liquidity.test.ts src/brain/security-cache.test.ts src/brain/concurrency-limit.test.ts src/brain/wallet-candidate-store.test.ts src/brain/wallet-performance.test.ts src/brain/wallet-trade-store.test.ts src/brain/wallet-ranking.test.ts src/brain/paper-trading.test.ts"
+    "test": "tsx --test src/decoder/decoder.test.ts src/brain/security.test.ts src/brain/security-onchain.test.ts src/brain/holder-stats.test.ts src/brain/liquidity.test.ts src/brain/security-cache.test.ts src/brain/concurrency-limit.test.ts src/brain/wallet-candidate-store.test.ts src/brain/wallet-performance.test.ts src/brain/wallet-trade-store.test.ts src/brain/wallet-ranking.test.ts src/brain/paper-trading.test.ts",
+    "demo:paper": "tsx scripts/paper-trading-demo.ts"
   },
   "keywords": [],
   "author": "",
