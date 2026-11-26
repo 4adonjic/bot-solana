@@ -46,16 +46,7 @@ export function parseTokenBalanceChanges(
 
   if (candidates.length === 0) return null;
 
-  if (candidates.length > 1) {
-    logger.debug(
-      {
-        signature: tx.signature,
-        changedMints: candidates.map((candidate) => candidate.mint),
-      },
-      "Transaction ambiguë : plusieurs tokens non-quote ont changé",
-    );
-    return null;
-  }
+  if (candidates.length > 1) return null;
 
   const candidate = candidates[0];
   if (!candidate) return null;
@@ -64,13 +55,7 @@ export function parseTokenBalanceChanges(
   const rawAmount = (isBuy ? candidate.delta : -candidate.delta).toString();
   const uiAmount = Number(rawAmount) / 10 ** candidate.decimals;
 
-  if (!Number.isFinite(uiAmount)) {
-    logger.warn(
-      { signature: tx.signature, mint: candidate.mint },
-      "Montant de token non représentable en nombre",
-    );
-    return null;
-  }
+  if (!Number.isFinite(uiAmount)) return null;
 
   const dexProgramId = detectDexProgram(tx);
 
