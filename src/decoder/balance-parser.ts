@@ -128,7 +128,12 @@ export function parseWalletTradeChanges(
       }
     }
 
-    if (options.requireQuoteEvidence && (!trade.quoteAmountRaw || !trade.quoteMint)) continue;
+    if (options.requireQuoteEvidence && (
+      !trade.quoteAmountRaw ||
+      !trade.quoteMint ||
+      trade.quoteSource !== "token_balance" ||
+      trade.quoteAmountIsEstimate !== false
+    )) continue;
 
     trades.push(trade);
   }
