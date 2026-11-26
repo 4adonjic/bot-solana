@@ -23,11 +23,12 @@ async function loadDashboardSnapshot(directory) {
     readJson(path.join(directory, 'paper-trading.json'), null),
     readJsonLines(path.join(directory, 'wallet-trades.jsonl')),
   ]);
-  const candidates = candidateData && candidateData.wallets && typeof candidateData.wallets === 'object'
+  const candidates = candidateData && candidateData.version === 1 && candidateData.wallets && typeof candidateData.wallets === 'object'
     ? Object.values(candidateData.wallets) : [];
-  const watchlist = watchlistData && watchlistData.wallets && typeof watchlistData.wallets === 'object'
+  const watchlist = watchlistData && watchlistData.version === 1 && watchlistData.wallets && typeof watchlistData.wallets === 'object'
     ? Object.values(watchlistData.wallets) : [];
-  const paper = paperData && paperData.version === 1 ? paperData : null;
+  const paper = paperData && paperData.version === 1 && paperData.balances && Array.isArray(paperData.positions) && Array.isArray(paperData.fills)
+    ? paperData : null;
   return {
     generatedAt: new Date().toISOString(), dataDirectory: directory,
     sources: { candidates: candidates.length > 0, trades: trades.length > 0, watchlist: watchlist.length > 0, paper: paper !== null },
