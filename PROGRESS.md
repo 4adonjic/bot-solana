@@ -43,7 +43,7 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
 - Les transactions ambiguës avec plusieurs tokens non-quote modifiés sont écartées.
 - La PR #11 ajoute `wallet` au trade décodé et un extracteur de variations non ambiguës pour tous les propriétaires présents dans une transaction.
-- La branche de travail actuelle ajoute un flux WebSocket DEX activable avec `ENABLE_DEX_DISCOVERY=true`, et journalise les wallets candidats extraits des transactions DEX. Le flux est désactivé par défaut.
+- La branche de travail actuelle ajoute un flux WebSocket DEX activable avec `ENABLE_DEX_DISCOVERY=true`, et journalise les wallets candidats extraits des transactions DEX. Le flux est désactivé par défaut ; en mode DEX seul, aucun `TARGET_WALLETS` manuel n'est nécessaire.
 - Limites : les mouvements de tokens ne prouvent pas à eux seuls un swap DEX ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
 ## Module 3 – Sécurité des tokens
