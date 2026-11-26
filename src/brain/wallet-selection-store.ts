@@ -2,6 +2,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { WalletRanking } from "./wallet-ranking.js";
 
+export type WalletPerformanceTrend = "improving" | "stable" | "declining";
+
 export interface WalletSelectionRecord {
   wallet: string;
   quoteMint: string;
@@ -10,6 +12,9 @@ export interface WalletSelectionRecord {
   lastSelectedAt: string;
   selectionCount: number;
   active: boolean;
+  /** Last five ranking snapshots, oldest first. */
+  scoreHistory: number[];
+  trend: WalletPerformanceTrend;
 }
 
 interface SelectionStoreFile {
@@ -23,6 +28,8 @@ export interface WalletSelectionStoreOptions {
 }
 
 const DEFAULT_FILE_PATH = "data/wallet-watchlist.json";
+const SCORE_HISTORY_LIMIT = 5;
+const DECLINE_THRESHOLD = 10;
 
 export class WalletSelectionStore {
   private readonly filePath: string;
@@ -51,7 +58,13 @@ export class WalletSelectionStore {
         if (!this.isRecord(value) || key !== this.keyOf(value.wallet, value.quoteMint)) {
           throw new Error(`Invalid wallet watchlist entry: ${key}`);
         }
-        this.wallets.set(key, value);
+        // Migrate entries created before score history was introduced.
+        const scoreHistory = value.scoreHistory ?? [value.reliabilityScore];
+        this.wallets.set(key, {
+          ...value,
+          scoreHistory,
+          trend: value.trend ?? "stable",
+        });
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -59,26 +72,53 @@ export class WalletSelectionStore {
     this.initialized = true;
   }
 
-  async sync(selected: readonly WalletRanking[]): Promise<WalletSelectionRecord[]> {
+  async sync(
+    rankings: readonly WalletRanking[],
+    selected: readonly WalletRanking[],
+  ): Promise<WalletSelectionRecord[]> {
     this.assertInitialized();
     const now = this.now().toISOString();
-    for (const [key, record] of this.wallets) {
-      this.wallets.set(key, { ...record, active: false });
+    const rankingByKey = new Map(rankings.map((item) => [this.keyOf(item.wallet, item.quoteMint), item]));
+    const selectedKeys = new Set(selected.map((item) => this.keyOf(item.wallet, item.quoteMint)));
+
+    for (const [key, previous] of this.wallets) {
+      const latest = rankingByKey.get(key);
+      const scoreHistory = latest?.reliabilityScore === null || latest?.reliabilityScore === undefined
+        ? previous.scoreHistory
+        : [...previous.scoreHistory, latest.reliabilityScore].slice(-SCORE_HISTORY_LIMIT);
+      const trend = latest ? this.calculateTrend(scoreHistory) : previous.trend;
+      const active = selectedKeys.has(key) && trend !== "declining";
+      this.wallets.set(key, {
+        ...previous,
+        ...(latest?.reliabilityScore === null || latest?.reliabilityScore === undefined
+          ? {}
+          : { reliabilityScore: latest.reliabilityScore }),
+        ...(latest ? { scoreHistory, trend } : {}),
+        lastSelectedAt: active ? now : previous.lastSelectedAt,
+        selectionCount: previous.selectionCount + (active && !previous.active ? 1 : 0),
+        active,
+      });
     }
+
     for (const item of selected) {
       if (item.reliabilityScore === null) continue;
       const key = this.keyOf(item.wallet, item.quoteMint);
-      const previous = this.wallets.get(key);
+      if (this.wallets.has(key)) continue;
       this.wallets.set(key, {
         wallet: item.wallet,
         quoteMint: item.quoteMint,
         reliabilityScore: item.reliabilityScore,
-        firstSelectedAt: previous?.firstSelectedAt ?? now,
+        firstSelectedAt: now,
         lastSelectedAt: now,
-        selectionCount: (previous?.selectionCount ?? 0) + (previous?.active ? 0 : 1),
+        selectionCount: 1,
         active: true,
+        scoreHistory: [item.reliabilityScore],
+        trend: "stable",
       });
     }
+
+
+
     await this.persist();
     return this.list();
   }
@@ -90,6 +130,19 @@ export class WalletSelectionStore {
       b.reliabilityScore - a.reliabilityScore ||
       b.lastSelectedAt.localeCompare(a.lastSelectedAt),
     );
+  }
+
+  private calculateTrend(history: readonly number[]): WalletPerformanceTrend {
+    if (history.length < 2) return "stable";
+    const previousPeak = Math.max(...history.slice(0, -1));
+    const latest = history[history.length - 1]!;
+    if (latest <= previousPeak - DECLINE_THRESHOLD) return "declining";
+    if (latest >= previousPeak + 5) return "improving";
+    return "stable";
+  }
+
+  private isDeclining(history: readonly number[]): boolean {
+    return this.calculateTrend(history) === "declining";
   }
 
   private keyOf(wallet: string, quoteMint: string): string {
@@ -111,7 +164,7 @@ export class WalletSelectionStore {
     if (!this.initialized) throw new Error("WalletSelectionStore.init() must be called first");
   }
 
-  private isRecord(value: unknown): value is WalletSelectionRecord {
+  private isRecord(value: unknown): value is WalletSelectionRecord & { scoreHistory?: number[]; trend?: WalletPerformanceTrend } {
     if (typeof value !== "object" || value === null) return false;
     const item = value as Partial<WalletSelectionRecord>;
     return typeof item.wallet === "string" && item.wallet.length > 0 &&
@@ -121,6 +174,10 @@ export class WalletSelectionStore {
       typeof item.firstSelectedAt === "string" && !Number.isNaN(Date.parse(item.firstSelectedAt)) &&
       typeof item.lastSelectedAt === "string" && !Number.isNaN(Date.parse(item.lastSelectedAt)) &&
       Number.isSafeInteger(item.selectionCount) && (item.selectionCount ?? 0) >= 1 &&
-      typeof item.active === "boolean";
+      typeof item.active === "boolean" &&
+      (item.scoreHistory === undefined || (Array.isArray(item.scoreHistory) &&
+        item.scoreHistory.length >= 1 && item.scoreHistory.length <= SCORE_HISTORY_LIMIT &&
+        item.scoreHistory.every((score) => typeof score === "number" && Number.isFinite(score) && score >= 0 && score <= 100))) &&
+      (item.trend === undefined || item.trend === "improving" || item.trend === "stable" || item.trend === "declining");
   }
 }
