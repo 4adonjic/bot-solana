@@ -14,7 +14,9 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 - `src/core/logger.ts` : logger Pino partagé.
 - `src/radar/radar.ts` : surveillance WebSocket des wallets.
 - `src/decoder/` : récupération et décodage des transactions.
-- `src/brain/security.ts` : première version du scoring de sécurité (évalue des données fournies, ne les collecte pas encore).
+- `src/brain/security.ts` : scoring de sécurité.
+- `src/brain/security-onchain.ts` : lecture des autorités mint/freeze.
+- `src/brain/holder-stats.ts` : calcul et récupération RPC des métriques de détenteurs.
 - `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
@@ -37,15 +39,16 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - 8 tests unitaires passent. Les vérifications CI `npm test`, `npm run typecheck` et `npm run build` ont réussi.
 - Limites : les swaps multi-actifs ambigus sont écartés ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
-## Module 3 – Sécurité des tokens (première étape)
-Branche : `feat/token-security-scoring`.
-- Ajout d'un évaluateur pur qui calcule un score de risque sur 100 à partir des autorités mint/freeze, de la liquidité, de la concentration des 10 plus gros détenteurs et du nombre de détenteurs.
-- Trois décisions : `allow`, `review`, `reject`. Les données manquantes ou invalides imposent au minimum une revue ; elles ne sont jamais considérées comme sûres.
-- 6 tests unitaires ajoutés.
-- Important : cette première étape ne récupère pas encore les données on-chain. Le scoring est heuristique et ne garantit pas qu'un token est sûr. Il ne doit pas déclencher seul un achat réel.
+## Module 3 – Sécurité des tokens
+- Scoring heuristique sur 100 : autorités mint/freeze, liquidité, concentration des 10 plus gros détenteurs, nombre de détenteurs.
+- Décisions `allow`, `review`, `reject`. Les données manquantes ou invalides imposent au minimum une revue.
+- Les autorités mint/freeze sont récupérées par RPC dans `security-onchain.ts` (PR #4 fusionnée).
+- Nouvelle étape : `holder-stats.ts` récupère les comptes SPL Token et Token-2022, agrège leurs soldes par adresse propriétaire et calcule le nombre de propriétaires avec solde et la part cumulée des 10 plus gros.
+- Tests ajoutés pour l'agrégation et les entrées invalides.
+- Limites : la requête RPC peut être lourde ou limitée par le fournisseur ; les comptes de pools, coffres de programmes et exchanges peuvent compter comme propriétaires, ce qui fausse la concentration économique. Cette métrique reste indicative. La liquidité USD n'est pas encore collectée. Rien n'est encore branché automatiquement au radar ni à un achat.
 
 ## Roadmap restante
-- Module 3 : connecter des sources fiables pour récupérer les métriques on-chain, vérifier leur fraîcheur et valider les seuils.
+- Module 3 : source fiable de liquidité USD, exclusions/étiquetage des coffres de pools, fraîcheur et validation des métriques, puis branchement contrôlé au scoring.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
