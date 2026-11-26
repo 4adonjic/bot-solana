@@ -66,7 +66,11 @@ async function main(): Promise<void> {
     }
   });
 
-  await defaultRadar.start();
+  if (config.targetWallets.length > 0) {
+    await defaultRadar.start();
+  } else {
+    logger.info("Aucun wallet manuel configuré : radar ciblé désactivé.");
+  }
 
   if (config.enableDexDiscovery) {
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
