@@ -9,13 +9,14 @@ import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
-  const analyzeCachedSecurity = createSecurityAnalysisCache(
-    (mint) => analyzeTokenSecurity(connection, mint),
-    { ttlMs: 60_000, maxEntries: 500 },
-  );
   const analyzeLimitedSecurity = createConcurrencyLimiter(
-    analyzeCachedSecurity,
+    (mint: string) => analyzeTokenSecurity(connection, mint),
     { maxConcurrent: 2, maxQueued: 100 },
+  );
+  // Cache first: duplicate mints share one promise before entering the queue.
+  const analyzeCachedSecurity = createSecurityAnalysisCache(
+    analyzeLimitedSecurity,
+    { ttlMs: 60_000, maxEntries: 500 },
   );
 
   const version = await connection.getVersion();
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
     );
 
     try {
-      const report = await analyzeLimitedSecurity(trade.mint);
+      const report = await analyzeCachedSecurity(trade.mint);
       logger.info(
         {
           mint: report.mint,
