@@ -44,7 +44,6 @@ interface MutablePerformance {
   buyCount: number;
   sellCount: number;
   matchedSellCount: number;
-  ignoredTradeCount: number;
   boughtToken: bigint;
   soldToken: bigint;
   matchedSoldToken: bigint;
@@ -87,8 +86,8 @@ export function calculateWalletPerformance(
 
     const key = JSON.stringify([trade.wallet, trade.mint, trade.quoteMint]);
     let group = groups.get(key);
-    if (!group) {
-      group = {
+    if (group === undefined) {
+      const created: MutablePerformance = {
         wallet: trade.wallet,
         mint: trade.mint,
         quoteMint: trade.quoteMint,
@@ -103,12 +102,8 @@ export function calculateWalletPerformance(
         realizedPnl: 0n,
         lots: [],
       };
-      groups.set(key, group);
-    }
-
-    if (group.quoteDecimals !== trade.quoteDecimals) {
-      group.ignoredTradeCount++;
-      continue;
+      groups.set(key, created);
+      group = created;
     }
 
     if (trade.side === "buy") {
