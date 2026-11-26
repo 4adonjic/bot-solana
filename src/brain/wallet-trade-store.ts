@@ -137,6 +137,8 @@ export class WalletTradeStore {
       typeof item.mint === "string" && item.mint.length > 0 &&
       (item.side === "buy" || item.side === "sell") &&
       typeof item.tokenAmountRaw === "string" && /^\d+$/.test(item.tokenAmountRaw) &&
+      (item.tokenBalanceBeforeRaw === undefined || (typeof item.tokenBalanceBeforeRaw === "string" && /^\d+$/.test(item.tokenBalanceBeforeRaw))) &&
+      (item.tokenBalanceAfterRaw === undefined || (typeof item.tokenBalanceAfterRaw === "string" && /^\d+$/.test(item.tokenBalanceAfterRaw))) &&
       typeof item.observedAt === "string" && !Number.isNaN(Date.parse(item.observedAt)) &&
       Number.isSafeInteger(item.slot) && (item.slot ?? -1) >= 0 &&
       Number.isInteger(item.tokenDecimals) && (item.tokenDecimals ?? -1) >= 0 && (item.tokenDecimals ?? 19) <= 18 &&

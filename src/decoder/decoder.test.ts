@@ -56,6 +56,8 @@ test("aggregates several token accounts for the same mint", () => {
   assert.ok(trade);
   assert.equal(trade.side, "buy");
   assert.equal(trade.tokenAmountRaw, "200000");
+  assert.equal(trade.tokenBalanceBeforeRaw, "1500000");
+  assert.equal(trade.tokenBalanceAfterRaw, "1700000");
 });
 
 test("captures WSOL quote amount in raw lamports for a buy", () => {

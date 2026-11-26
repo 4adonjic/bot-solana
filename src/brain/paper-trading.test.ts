@@ -70,6 +70,8 @@ test("simulates a buy and a full copied exit with slippage and fees", async () =
 
     const sell = await engine.processTrade(sourceTrade("sell", "sell-signature", {
       quoteAmountRaw: "120",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "0",
       observedAt: "2026-01-01T00:01:00.000Z",
     }));
     assert.equal(sell.executed, true);
@@ -81,6 +83,46 @@ test("simulates a buy and a full copied exit with slippage and fees", async () =
     assert.equal(sell.balanceRaw, "10153");
     assert.equal(engine.snapshot().positions.length, 0);
     assert.equal(engine.snapshot().fills.length, 2);
+  });
+});
+
+test("copies only the leader sold fraction and preserves remaining cost basis", async () => {
+  await withEngine(async (engine) => {
+    const buy = await engine.processTrade(sourceTrade("buy", "partial-buy"));
+    assert.equal(buy.executed, true);
+    if (!buy.executed) return;
+
+    const sell = await engine.processTrade(sourceTrade("sell", "partial-sell", {
+      tokenAmountRaw: "25",
+      quoteAmountRaw: "25",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "75",
+    }));
+    assert.equal(sell.executed, true);
+    if (!sell.executed) return;
+    assert.equal(sell.fill.tokenAmountRaw, "245");
+    assert.equal(sell.position?.tokenAmountRaw, "735");
+    assert.equal(sell.position?.costBasisRaw, "750");
+    assert.equal(engine.snapshot().positions.length, 1);
+  });
+});
+
+test("rejects sells when leader pre/post balances are missing or inconsistent", async () => {
+  await withEngine(async (engine) => {
+    await engine.processTrade(sourceTrade("buy", "balance-check-buy"));
+    const missing = await engine.processTrade(sourceTrade("sell", "balance-check-missing"));
+    assert.deepEqual(missing, {
+      executed: false,
+      reason: "missing_leader_position_balances_for_proportional_sell",
+    });
+    const inconsistent = await engine.processTrade(sourceTrade("sell", "balance-check-invalid", {
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "80",
+    }));
+    assert.deepEqual(inconsistent, {
+      executed: false,
+      reason: "inconsistent_leader_position_balances",
+    });
   });
 });
 

@@ -78,6 +78,8 @@ export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
       amountOut: isBuy ? 0 : uiAmount,
       tokenAmountRaw: rawAmount,
       tokenDecimals: change.decimals,
+      tokenBalanceBeforeRaw: change.before.toString(),
+      tokenBalanceAfterRaw: change.after.toString(),
       ...(dexProgramId ? { dexProgramId } : {}),
       ...(tx.blockTime == null ? {} : { timestamp: tx.blockTime * 1000 }),
     };
