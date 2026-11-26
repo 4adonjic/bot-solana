@@ -14,20 +14,13 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 - `src/core/logger.ts` : logger Pino partagé.
 - `src/radar/radar.ts` : surveillance WebSocket des wallets.
 - `src/decoder/` : récupération et décodage des transactions.
-- `src/brain/`, `src/shadow/`, `src/executor/` : étapes futures.
+- `src/brain/security.ts` : première version du scoring de sécurité (évalue des données fournies, ne les collecte pas encore).
+- `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
 Les imports relatifs doivent finir par `.js`, même si les fichiers source sont en `.ts`.
 
-## Étapes validées
-### 1.1 – Initialisation
-Projet initialisé, dépendances verrouillées, tsconfig strict, connexion RPC testée.
-
-### 1.2 – Configuration et logs
-- `src/config/env.ts` valide `RPC_HTTP_URL`, `RPC_WS_URL`, `LOG_LEVEL` et `TARGET_WALLETS`.
-- `src/core/logger.ts` configure Pino.
-
-### 1.3 – Radar WebSocket
+## Module 1 – Radar WebSocket
 - Fusionné dans `main` via la PR #1.
 - `RPC_WS_URL` est transmis à `Connection`.
 - Chaque wallet cible reçoit un abonnement `onLogs`.
@@ -35,26 +28,24 @@ Projet initialisé, dépendances verrouillées, tsconfig strict, connexion RPC t
 - GitHub Actions a validé `npm ci`, `npm run typecheck` et `npm run build`.
 - À tester encore avec une vraie connexion RPC et un wallet qui effectue une transaction. La reconnexion en cas de coupure réseau n'a pas encore été validée en conditions réelles.
 
-## Module 2 – Décodeur (en cours)
-Branche actuelle : `feat/decoder-balance-diffs` (PR #2 ouverte). La CI valide `npm test`, `npm run typecheck` et `npm run build`.
-- Les soldes pré- et post-transaction sont agrégés par wallet + mint.
-- Les nouveaux comptes de tokens et les comptes fermés sont pris en compte grâce à l'union des soldes avant/après.
-- Les calculs de variation utilisent `BigInt` sur les montants bruts, sans calculer la différence à partir de `uiAmount`.
-- Le résultat expose `tokenAmountRaw` et `tokenDecimals` pour conserver le montant exact. `amountIn` / `amountOut` restent des nombres en unités lisibles pour compatibilité.
-- Les instructions de haut niveau et internes sont normalisées pour retrouver les program IDs, y compris les index de programmes des transactions versionnées.
+## Module 2 – Décodeur
+- Fusionné dans `main` via la PR #2.
+- Les soldes pré- et post-transaction sont agrégés par wallet + mint, y compris les comptes créés ou fermés.
+- Les variations utilisent `BigInt` sur les montants bruts ; le résultat expose `tokenAmountRaw` et `tokenDecimals`.
+- Les instructions de haut niveau et internes sont normalisées, y compris pour les transactions versionnées.
 - Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
-- Si plusieurs tokens non-quote changent pour le wallet, le décodeur renvoie `null` plutôt que de choisir arbitrairement un mint.
+- 8 tests unitaires passent. Les vérifications CI `npm test`, `npm run typecheck` et `npm run build` ont réussi.
+- Limites : les swaps multi-actifs ambigus sont écartés ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
-### Limites à traiter avant tout copy-trading réel
-- Le décodeur générique ne sait pas toujours identifier le token principal d'un swap multi-actifs ; les transactions ambiguës sont volontairement écartées.
-- La liste des program IDs DEX doit être vérifiée auprès des sources officielles.
-- Tests unitaires ajoutés dans `src/decoder/decoder.test.ts` : achat, vente totale, agrégation de plusieurs comptes, mouvements WSOL, ambiguïté, précision brute, wallet non surveillé et timestamp. Les 8 tests passent dans GitHub Actions.
-- Valider les résultats contre des transactions réelles avant de les utiliser pour prendre une décision.
-- `amountIn` / `amountOut` désignent actuellement la quantité du token suivi, pas la quantité de SOL ou de stablecoin dépensée/reçue.
+## Module 3 – Sécurité des tokens (première étape)
+Branche : `feat/token-security-scoring`.
+- Ajout d'un évaluateur pur qui calcule un score de risque sur 100 à partir des autorités mint/freeze, de la liquidité, de la concentration des 10 plus gros détenteurs et du nombre de détenteurs.
+- Trois décisions : `allow`, `review`, `reject`. Les données manquantes ou invalides imposent au minimum une revue ; elles ne sont jamais considérées comme sûres.
+- 6 tests unitaires ajoutés.
+- Important : cette première étape ne récupère pas encore les données on-chain. Le scoring est heuristique et ne garantit pas qu'un token est sûr. Il ne doit pas déclencher seul un achat réel.
 
-## Roadmap
-- Module 2 : fiabiliser et tester le décodeur, puis identifier précisément les swaps par DEX.
-- Module 3 : filtres de sécurité (mint/freeze authority, liquidité, top holders, scoring).
+## Roadmap restante
+- Module 3 : connecter des sources fiables pour récupérer les métriques on-chain, vérifier leur fraîcheur et valider les seuils.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
