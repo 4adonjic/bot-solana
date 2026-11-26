@@ -5,12 +5,17 @@ import { defaultRadar } from "./radar/radar.js";
 import { defaultDecoder } from "./decoder/decoder.js";
 import { analyzeTokenSecurity } from "./brain/security-pipeline.js";
 import { createSecurityAnalysisCache } from "./brain/security-cache.js";
+import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
   const analyzeCachedSecurity = createSecurityAnalysisCache(
     (mint) => analyzeTokenSecurity(connection, mint),
     { ttlMs: 60_000, maxEntries: 500 },
+  );
+  const analyzeLimitedSecurity = createConcurrencyLimiter(
+    analyzeCachedSecurity,
+    { maxConcurrent: 2, maxQueued: 100 },
   );
 
   const version = await connection.getVersion();
@@ -40,7 +45,7 @@ async function main(): Promise<void> {
     );
 
     try {
-      const report = await analyzeCachedSecurity(trade.mint);
+      const report = await analyzeLimitedSecurity(trade.mint);
       logger.info(
         {
           mint: report.mint,
