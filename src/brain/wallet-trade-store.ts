@@ -53,7 +53,7 @@ export class WalletTradeStore {
 
     const lines = content.split("\n");
     for (let index = 0; index < lines.length; index++) {
-      const line = lines[index];
+      const line = lines[index] ?? "";
       if (!line.trim()) continue;
       let parsed: unknown;
       try {
