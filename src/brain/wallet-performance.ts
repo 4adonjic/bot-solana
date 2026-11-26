@@ -20,7 +20,6 @@ export interface WalletPerformance {
   buyCount: number;
   sellCount: number;
   matchedSellCount: number;
-  ignoredTradeCount: number;
   boughtTokenRaw: string;
   soldTokenRaw: string;
   matchedSoldTokenRaw: string;
@@ -97,7 +96,6 @@ export function calculateWalletPerformance(
         buyCount: 0,
         sellCount: 0,
         matchedSellCount: 0,
-        ignoredTradeCount: 0,
         boughtToken: 0n,
         soldToken: 0n,
         matchedSoldToken: 0n,
@@ -164,7 +162,6 @@ export function calculateWalletPerformance(
       buyCount: group.buyCount,
       sellCount: group.sellCount,
       matchedSellCount: group.matchedSellCount,
-      ignoredTradeCount: group.ignoredTradeCount,
       boughtTokenRaw: group.boughtToken.toString(),
       soldTokenRaw: group.soldToken.toString(),
       matchedSoldTokenRaw: group.matchedSoldToken.toString(),
