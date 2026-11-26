@@ -35,7 +35,15 @@ const envSchema = z.object({
     )
     .pipe(z.array(base58PubkeySchema)),
   ENABLE_DEX_DISCOVERY: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  ENABLE_PAPER_TRADING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 }).superRefine((value, context) => {
+  if (value.ENABLE_PAPER_TRADING && !value.ENABLE_DEX_DISCOVERY) {
+    context.addIssue({
+      code: "custom",
+      path: ["ENABLE_PAPER_TRADING"],
+      message: "Le Paper Trading nécessite ENABLE_DEX_DISCOVERY=true",
+    });
+  }
   if (!value.ENABLE_DEX_DISCOVERY && value.TARGET_WALLETS.length === 0) {
     context.addIssue({
       code: "custom",
@@ -51,6 +59,7 @@ export type AppConfig = Readonly<{
   logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
   targetWallets: readonly string[];
   enableDexDiscovery: boolean;
+  enablePaperTrading: boolean;
 }>;
 
 function loadConfig(): AppConfig {
@@ -69,6 +78,7 @@ function loadConfig(): AppConfig {
     logLevel: parsed.data.LOG_LEVEL,
     targetWallets: parsed.data.TARGET_WALLETS,
     enableDexDiscovery: parsed.data.ENABLE_DEX_DISCOVERY,
+    enablePaperTrading: parsed.data.ENABLE_PAPER_TRADING,
   };
 }
 

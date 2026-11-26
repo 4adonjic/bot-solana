@@ -98,6 +98,17 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Le classement est journalisé au démarrage puis toutes les 100 nouvelles observations réellement ajoutées.
 - Limites : PnL brut avant frais, détection de swaps encore heuristique, résultats non convertis en valeur fiat commune, et aucun ordre réel exécuté.
 
+## Module 5 – Paper Trading / simulation en temps réel
+- La PR #18 ajoute un portefeuille fictif persistant dans `data/paper-trading.json`; aucun appel de signature ou d'envoi de transaction Solana n'existe dans ce module.
+- Activation explicite par `ENABLE_DEX_DISCOVERY=true` et `ENABLE_PAPER_TRADING=true`. Le Paper Trading reste désactivé par défaut.
+- Le bot ne copie que les wallets ayant au moins 10 ventes FIFO rapprochées sur 3 jours fiables, puis exige une décision de sécurité token `allow`.
+- Seuls les montants de cotation WSOL/USDC exacts (variation de solde token, non estimée) sont acceptés.
+- Portefeuille initial par défaut : 1 SOL + 100 USDC virtuels. Taille fixe par entrée : 0,05 SOL ou 5 USDC.
+- Chaque simulation applique 0,5 % de slippage et 0,1 % de frais. Un signal de vente ferme toute la position virtuelle correspondante pour ce wallet et ce token.
+- Les soldes, positions ouvertes et exécutions simulées sont sauvegardés et restaurés au redémarrage.
+- Les tests couvrent les achats/ventes simulés, les frais, le slippage, la persistance, les doublons, les montants estimés, les soldes insuffisants et les traitements concurrents.
+- Limites : le prix de référence est dérivé de la transaction source, pas d'une cotation indépendante au moment exact de copie ; le modèle de vente ferme toute la position ; aucune garantie de rentabilité. Valider sur flux réel et examiner les journaux avant toute autre étape.
+
 ## Roadmap restante
 - Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
 - Ajouter un historique de performance fiable : coût d'entrée/sortie en SOL, frais, PnL réalisé/virtuel, drawdown et échantillon minimum.

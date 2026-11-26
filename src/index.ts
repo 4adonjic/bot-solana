@@ -11,6 +11,7 @@ import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
 import { WalletTradeStore } from "./brain/wallet-trade-store.js";
 import { calculateWalletPerformance } from "./brain/wallet-performance.js";
 import { rankWallets } from "./brain/wallet-ranking.js";
+import { PaperTradingEngine } from "./brain/paper-trading.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, "confirmed");
@@ -86,6 +87,24 @@ async function main(): Promise<void> {
     await candidateStore.init();
     const tradeStore = new WalletTradeStore();
     await tradeStore.init();
+    const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
+    if (paperEngine) {
+      await paperEngine.init();
+      const paperSnapshot = paperEngine.snapshot();
+      logger.warn(
+        {
+          virtualBalancesRaw: paperSnapshot.balances,
+          openPositions: paperSnapshot.positions.length,
+          simulatedFills: paperSnapshot.fills.length,
+          defaultStartingBalances: { SOL: "1", USDC: "100" },
+          fixedBuySizes: { SOL: "0.05", USDC: "5" },
+          slippageBps: 50,
+          feeBps: 10,
+          stateFile: "data/paper-trading.json",
+        },
+        "PAPER TRADING ACTIF : portefeuille fictif uniquement, aucune transaction blockchain ne sera envoyée",
+      );
+    }
     const refreshWalletRanking = (): void => {
       const performance = calculateWalletPerformance(tradeStore.list());
       const rankings = rankWallets(performance);
@@ -155,6 +174,53 @@ async function main(): Promise<void> {
             ...(candidate.quoteAmountIsEstimate === undefined ? {} : { quoteAmountIsEstimate: candidate.quoteAmountIsEstimate }),
             ...(candidate.dexProgramId ? { dexProgramId: candidate.dexProgramId } : {}),
           });
+
+          if (paperEngine && historyResult.inserted && candidate.quoteMint) {
+            const ranking = rankWallets(calculateWalletPerformance(tradeStore.list()));
+            const leader = ranking.find((item) =>
+              item.wallet === candidate.wallet && item.quoteMint === candidate.quoteMint,
+            );
+            if (!leader?.eligible) {
+              logger.debug(
+                { wallet: candidate.wallet, quoteMint: candidate.quoteMint, matchedSells: leader?.matchedSellCount ?? 0, activeDays: leader?.activeDays ?? 0 },
+                "Paper Trading ignoré : wallet pas encore assez documenté",
+              );
+            } else {
+              const security = await analyzeCachedSecurity(candidate.mint);
+              if (security.assessment.decision !== "allow") {
+                logger.info(
+                  { wallet: candidate.wallet, mint: candidate.mint, decision: security.assessment.decision, riskScore: security.assessment.riskScore, missingChecks: security.assessment.missingChecks },
+                  "Paper Trading ignoré : sécurité du token non validée",
+                );
+              } else {
+                const paperResult = await paperEngine.processTrade({
+                  wallet: candidate.wallet,
+                  signature: candidate.signature,
+                  mint: candidate.mint,
+                  side: candidate.side,
+                  tokenAmountRaw: candidate.tokenAmountRaw,
+                  quoteMint: candidate.quoteMint,
+                  observedAt,
+                  ...(candidate.quoteAmountRaw ? { quoteAmountRaw: candidate.quoteAmountRaw } : {}),
+                  ...(candidate.quoteDecimals === undefined ? {} : { quoteDecimals: candidate.quoteDecimals }),
+                  ...(candidate.quoteSource ? { quoteSource: candidate.quoteSource } : {}),
+                  ...(candidate.quoteAmountIsEstimate === undefined ? {} : { quoteAmountIsEstimate: candidate.quoteAmountIsEstimate }),
+                  slot,
+                });
+                if (paperResult.executed) {
+                  logger.info(
+                    { ...paperResult.fill, virtualBalanceRaw: paperResult.balanceRaw, openPosition: paperResult.position },
+                    "ORDRE SIMULÉ exécuté (aucune transaction réelle)",
+                  );
+                } else {
+                  logger.debug(
+                    { wallet: candidate.wallet, mint: candidate.mint, side: candidate.side, reason: paperResult.reason },
+                    "Ordre Paper Trading non exécuté",
+                  );
+                }
+              }
+            }
+          }
 
           logger.info(
             {
