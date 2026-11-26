@@ -2,6 +2,7 @@ import { Connection } from "@solana/web3.js";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { defaultRadar } from "./radar/radar.js";
+import { defaultDexRadar } from "./radar/dex-radar.js";
 import { defaultDecoder } from "./decoder/decoder.js";
 import { analyzeTokenSecurity } from "./brain/security-pipeline.js";
 import { createSecurityAnalysisCache } from "./brain/security-cache.js";
@@ -66,6 +67,34 @@ async function main(): Promise<void> {
   });
 
   await defaultRadar.start();
+
+  if (config.enableDexDiscovery) {
+    defaultDexRadar.setOnTransaction(async (signature, slot) => {
+      const candidates = await defaultDecoder.decodeWalletCandidates(signature);
+      if (candidates.length === 0) return;
+
+      for (const candidate of candidates) {
+        logger.info(
+          {
+            wallet: candidate.wallet,
+            signature: candidate.signature,
+            slot,
+            mint: candidate.mint,
+            side: candidate.side,
+            tokenAmountRaw: candidate.tokenAmountRaw,
+            dexProgramId: candidate.dexProgramId,
+          },
+          "Wallet candidat détecté via le flux DEX (observation uniquement)",
+        );
+      }
+    });
+
+    await defaultDexRadar.start();
+  } else {
+    logger.info(
+      "Découverte DEX désactivée. Définir ENABLE_DEX_DISCOVERY=true pour activer le flux.",
+    );
+  }
 }
 
 main().catch((error: unknown) => {
