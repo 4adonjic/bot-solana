@@ -1,75 +1,64 @@
 # PROGRESS – Bot copy-trading Solana (solana-bot-trade)
 
-## Le projet en une phrase
+## Le projet
 Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transactions, filtre les tokens douteux, simule les trades (shadow), puis copie les bons trades avec des sécurités.
 
-## Environnement réel
-- **Windows + PowerShell** (pas Linux/Ubuntu), dossier : `C:\Users\...\Documents\solana-bot-trade`
-- Node v22.23.2, npm 10.9.8
-- **PowerShell bloque `npm`** (scripts .ps1 désactivés) → toujours lancer avec `cmd /c`, par exemple :
-  - `cmd /c "npm run typecheck"`
-  - `cmd /c "npm run dev"`
-  - (ou une fois : `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`)
-- Les commandes longues (npm install) peuvent être coupées par Cline : lancer une seule commande à la fois, et attendre la fin avant la suivante.
-
-## Versions installées (exactes)
-- Prod : `@solana/web3.js` **1.99.0** (v1 volontairement, PAS la v3), `dotenv` 18.0.10, `pino` 10.4.0, `zod` 4.6.7
-- Dev : `typescript` 7.0.2, `tsx` 4.23.15, `@types/node` 26.6.6, `pino-pretty` 13.2.0
-- Piège connu : `npm install` sans version installe web3.js 3.x. Toujours vérifier avec `cmd /c "npm ls @solana/web3.js"` → doit afficher 1.99.0.
-- Un avertissement EBADENGINE (`@solana-program/stake` demande Node ≥ 24) est apparu pendant l'installation de la v3. À vérifier : `cmd /c "npm ls @solana-program/stake"`. S'il reste, c'est un résidu, sans impact sur la v1.
+## Environnement
+- Windows + PowerShell, Node.js 22.23.2, npm 10.9.8.
+- Si PowerShell bloque les scripts npm, lancer les commandes via `cmd /c "npm ..."`.
+- Dépendances verrouillées dans `package-lock.json`. Garder `@solana/web3.js` en version 1.x (actuellement 1.99.0).
+- Ne jamais committer le fichier `.env` ni les clés RPC privées.
 
 ## Arborescence
-```
-solana-bot-trade/
-├─ src/
-│  ├─ config/env.ts      (étape 1.2)
-│  ├─ core/logger.ts     (étape 1.2)
-│  ├─ radar/radar.ts     (écoute WebSocket, étape 1.3 en cours)
-│  ├─ decoder/           (prototype présent, à fiabiliser – Module 2)
-│  ├─ brain/             (vide, Module 3)
-│  ├─ shadow/            (vide, Module 4)
-│  ├─ executor/          (vide, Module 5)
-│  └─ index.ts
-├─ .env  (ignoré par git)   ├─ .env.example   ├─ .gitignore
-├─ package.json ("type": "module")   └─ tsconfig.json (strict, NodeNext, ES2022)
-```
-Scripts : `dev` (tsx watch src/index.ts), `build` (tsc), `start` (node dist/index.js), `typecheck` (tsc --noEmit).
+- `src/config/env.ts` : validation Zod de la configuration.
+- `src/core/logger.ts` : logger Pino partagé.
+- `src/radar/radar.ts` : surveillance WebSocket des wallets.
+- `src/decoder/` : récupération et décodage des transactions.
+- `src/brain/`, `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
-Les imports relatifs doivent finir par `.js` (ex : `import { config } from "./config/env.js"`), même si le fichier source est `.ts`.
+Les imports relatifs doivent finir par `.js`, même si les fichiers source sont en `.ts`.
 
 ## Étapes validées
-### 1.1 – Init (validée)
-Projet initialisé, dépendances en versions exactes, tsconfig strict, connexion RPC réelle OK (log de la version `solana-core`).
+### 1.1 – Initialisation
+Projet initialisé, dépendances verrouillées, tsconfig strict, connexion RPC testée.
 
-### 1.2 – Config zod + logger (validée)
-- `src/config/env.ts` : schéma zod qui valide `RPC_HTTP_URL`, `RPC_WS_URL` (ws/wss), `LOG_LEVEL`, `TARGET_WALLETS` (liste de vraies clés publiques Solana). Exporte un `config` typé en lecture seule. Si la config est invalide, le programme s'arrête avec un message clair (testé avec un wallet invalide).
-- `src/core/logger.ts` : logger pino partagé, basé sur `config.logLevel`.
-- `.env` créé (avec un wallet de test) ; `.env.example` mis à jour avec `TARGET_WALLETS`.
-- `src/index.ts` utilise config + logger et affiche la connexion RPC.
-- Test OK : `cmd /c "npm run typecheck"` puis `cmd /c "npm run dev"`.
+### 1.2 – Configuration et logs
+- `src/config/env.ts` valide `RPC_HTTP_URL`, `RPC_WS_URL`, `LOG_LEVEL` et `TARGET_WALLETS`.
+- `src/core/logger.ts` configure Pino.
 
-## Étape en cours : 1.3 – Fiabilisation du radar WebSocket
-- `src/radar/radar.ts` existe déjà : il utilise `connection.onLogs` et surveille maintenant chaque wallet cible.
-- L'endpoint `RPC_WS_URL` est explicitement transmis à `Connection` via `wsEndpoint`.
-- Suppression de la fausse déconnexion toutes les 10 secondes. Le WebSocket de web3.js assure sa reconnexion interne ; le radar gère les échecs de création des abonnements avec un backoff exponentiel plafonné à 30 secondes.
-- `stop()` supprime les abonnements actifs.
-- À faire : vérifier le comportement de reconnexion en conditions réelles, ajouter éventuellement un health-check si les tests démontrent qu'il est nécessaire, puis valider `npm run typecheck` et `npm run build`.
+### 1.3 – Radar WebSocket
+- Fusionné dans `main` via la PR #1.
+- `RPC_WS_URL` est transmis à `Connection`.
+- Chaque wallet cible reçoit un abonnement `onLogs`.
+- Nettoyage des abonnements à l'arrêt et backoff exponentiel pour les échecs de création.
+- GitHub Actions a validé `npm ci`, `npm run typecheck` et `npm run build`.
+- À tester encore avec une vraie connexion RPC et un wallet qui effectue une transaction. La reconnexion en cas de coupure réseau n'a pas encore été validée en conditions réelles.
 
-Important : la modification est sur la branche `fix/radar-websocket`, pas encore fusionnée dans `main`. Les tests n'ont pas encore été exécutés.
+## Module 2 – Décodeur (en cours)
+Branche actuelle : `feat/decoder-balance-diffs`.
+- Les soldes pré- et post-transaction sont agrégés par wallet + mint.
+- Les nouveaux comptes de tokens et les comptes fermés sont pris en compte grâce à l'union des soldes avant/après.
+- Les calculs de variation utilisent `BigInt` sur les montants bruts, sans calculer la différence à partir de `uiAmount`.
+- Le résultat expose `tokenAmountRaw` et `tokenDecimals` pour conserver le montant exact. `amountIn` / `amountOut` restent des nombres en unités lisibles pour compatibilité.
+- Les instructions de haut niveau et internes sont normalisées pour retrouver les program IDs, y compris les index de programmes des transactions versionnées.
+- Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
+- Si plusieurs tokens non-quote changent pour le wallet, le décodeur renvoie `null` plutôt que de choisir arbitrairement un mint.
 
-## Roadmap restante
-- Module 2 : décodeur (pre/postTokenBalances, innerInstructions, détection DEX : Raydium, Pump.fun, Jupiter, Meteora, achat/vente, mint, montants)
-- Module 3 : filtres de sécurité (mint/freeze authority, liquidité, top holders, scoring < 50 ms)
-- Module 4 : shadow bot (SQLite/Prisma, PnL virtuel, TP/SL, copie de la vente)
-- Module 5 : exécution (swap Jupiter, priority fees, Jito, slippage, montant max, kill-switch)
+### Limites à traiter avant tout copy-trading réel
+- Le décodeur générique ne sait pas toujours identifier le token principal d'un swap multi-actifs ; les transactions ambiguës sont volontairement écartées.
+- La liste des program IDs DEX doit être vérifiée auprès des sources officielles.
+- Ajouter des tests unitaires avec des transactions représentatives (achat, vente, compte token créé/fermé, plusieurs comptes pour un mint, transaction ambiguë).
+- Valider les résultats contre des transactions réelles avant de les utiliser pour prendre une décision.
+- `amountIn` / `amountOut` désignent actuellement la quantité du token suivi, pas la quantité de SOL ou de stablecoin dépensée/reçue.
 
-## Pour reprendre avec Cline
-1. Vérifier dans les réglages de Cline le **fournisseur** et le **modèle** : la dernière erreur était « credit balance too low » de l'API **Anthropic**, donc Cline était sur le mauvais fournisseur. Choisir Google Gemini (modèle Flash Lite) ou un autre avec du quota.
-2. Ouvrir une **nouvelle tâche** (bouton +) et coller :
+## Roadmap
+- Module 2 : fiabiliser et tester le décodeur, puis identifier précisément les swaps par DEX.
+- Module 3 : filtres de sécurité (mint/freeze authority, liquidité, top holders, scoring).
+- Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
+- Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
-```
-Lis PROGRESS.md à la racine du projet avant de faire quoi que ce soit.
-Règles : une seule étape à la fois, explique le pourquoi avant le code, code propre sans placeholder, ne lance qu'une commande à la fois (Windows PowerShell : utilise cmd /c pour npm), donne-moi une commande de test puis attends mon "C'est bon, ça tourne". Réponses courtes, ne relis pas les fichiers inutilement.
-Reprends à l'étape 1.3 (radar WebSocket) en suivant le plan du fichier.
-```
+## Consignes de travail
+- Une étape à la fois, expliquer le but avant les modifications.
+- Une commande à la fois ; attendre le résultat avant de poursuivre.
+- Ne jamais activer d'exécution réelle sans tests et sécurités validés.
