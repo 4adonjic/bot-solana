@@ -56,7 +56,7 @@ test("excludes estimated native SOL and observations without quote amounts", () 
       quoteAmountIsEstimate: true,
     }),
     trade("buy", "100", "1000", "2026-01-02T00:00:00.000Z", {
-      quoteAmountRaw: undefined,
+      quoteAmountRaw: "",
     }),
   ]);
 
