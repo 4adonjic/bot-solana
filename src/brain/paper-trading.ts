@@ -61,8 +61,9 @@ const DEFAULT_ASSETS: readonly PaperQuoteAsset[] = [
 
 /**
  * Local paper portfolio. It never creates, signs, or submits Solana transactions.
- * Entries use a fixed quote budget; a copied sell closes the simulated position
- * for that leader/token pair. Source quote movements must be exact token deltas.
+ * Entries use a fixed quote budget. Sells copy the leader position fraction using
+ * exact pre/post aggregate token balances; ambiguous sells are rejected.
+ * Source quote movements must be exact token deltas. Prices remain a source-price proxy.
  */
 export class PaperTradingEngine {
   private readonly filePath: string;
@@ -221,14 +222,42 @@ export class PaperTradingEngine {
       if (!position || BigInt(position.tokenAmountRaw) <= 0n) {
         return { executed: false, reason: "no_open_paper_position" };
       }
-      tokenAmount = BigInt(position.tokenAmountRaw);
+      if (
+        trade.tokenBalanceBeforeRaw === undefined || trade.tokenBalanceAfterRaw === undefined ||
+        !/^\\d+$/.test(trade.tokenBalanceBeforeRaw) || !/^\\d+$/.test(trade.tokenBalanceAfterRaw)
+      ) {
+        return { executed: false, reason: "missing_leader_position_balances_for_proportional_sell" };
+      }
+      const leaderBefore = BigInt(trade.tokenBalanceBeforeRaw);
+      const leaderAfter = BigInt(trade.tokenBalanceAfterRaw);
+      if (leaderBefore <= 0n || leaderAfter >= leaderBefore || leaderBefore - leaderAfter !== sourceTokens) {
+        return { executed: false, reason: "inconsistent_leader_position_balances" };
+      }
+      const paperPositionTokens = BigInt(position.tokenAmountRaw);
+      tokenAmount = (paperPositionTokens * sourceTokens) / leaderBefore;
+      if (tokenAmount <= 0n) return { executed: false, reason: "proportional_sell_rounds_to_zero" };
+      if (tokenAmount > paperPositionTokens) return { executed: false, reason: "proportional_sell_exceeds_paper_position" };
       const grossProceeds = (tokenAmount * sourceQuote * BigInt(10_000 - this.slippageBps)) / (sourceTokens * 10_000n);
       fee = (grossProceeds * BigInt(this.feeBps)) / 10_000n;
       quoteAmount = grossProceeds - fee;
       if (quoteAmount <= 0n) return { executed: false, reason: "simulated_proceeds_round_to_zero" };
       balances[asset.mint] = (currentBalance + quoteAmount).toString();
-      positions.splice(positionIndex, 1);
-      nextPosition = null;
+      const costConsumed = tokenAmount === paperPositionTokens
+        ? BigInt(position.costBasisRaw)
+        : (BigInt(position.costBasisRaw) * tokenAmount) / paperPositionTokens;
+      const remainingTokens = paperPositionTokens - tokenAmount;
+      if (remainingTokens === 0n) {
+        positions.splice(positionIndex, 1);
+        nextPosition = null;
+      } else {
+        const updated: PaperPosition = {
+          ...position,
+          tokenAmountRaw: remainingTokens.toString(),
+          costBasisRaw: (BigInt(position.costBasisRaw) - costConsumed).toString(),
+        };
+        positions[positionIndex] = updated;
+        nextPosition = updated;
+      }
     }
 
     const fill: PaperFill = {
