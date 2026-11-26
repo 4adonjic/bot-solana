@@ -1,27 +1,28 @@
 import type { ParsedTrade, ParsedTransaction, TokenBalance } from "./types.js";
 import { detectDexProgram } from "./dex.js";
 
-const QUOTE_MINTS = new Set([
-  "So11111111111111111111111111111111111111112",
-  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-]);
+const QUOTE_DECIMALS: Record<string, number> = {
+  "So11111111111111111111111111111111111111112": 9,
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": 6,
+};
+const SOL_MINT_LABEL = "SOL";
+
+interface BalanceChange {
+  wallet: string;
+  mint: string;
+  decimals: number;
+  before: bigint;
+  after: bigint;
+}
 
 /**
  * Extracts unambiguous token balance changes for every owner represented in
- * the transaction. This is the foundation for discovering wallets without a
- * preconfigured allowlist; it does not itself decide whether a wallet is good.
+ * the transaction. Quote amounts are attached only when their direction is
+ * consistent with the acquired/sold token. Native SOL is explicitly marked
+ * as an estimate because rent and unrelated SOL transfers can affect it.
  */
 export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
-  const changes = new Map<
-    string,
-    {
-      wallet: string;
-      mint: string;
-      decimals: number;
-      before: bigint;
-      after: bigint;
-    }
-  >();
+  const changes = new Map<string, BalanceChange>();
 
   const addBalances = (balances: TokenBalance[], side: "before" | "after") => {
     for (const balance of balances) {
@@ -43,10 +44,10 @@ export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
   addBalances(tx.preTokenBalances, "before");
   addBalances(tx.postTokenBalances, "after");
 
-  const byWallet = new Map<string, typeof changes extends Map<string, infer V> ? V[] : never>();
+  const byWallet = new Map<string, BalanceChange[]>();
   for (const change of changes.values()) {
     const delta = change.after - change.before;
-    if (delta === 0n || QUOTE_MINTS.has(change.mint)) continue;
+    if (delta === 0n || Object.hasOwn(QUOTE_DECIMALS, change.mint)) continue;
     const walletChanges = byWallet.get(change.wallet) ?? [];
     walletChanges.push(change);
     byWallet.set(change.wallet, walletChanges);
@@ -68,7 +69,7 @@ export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
     const uiAmount = Number(rawAmount) / 10 ** change.decimals;
     if (!Number.isFinite(uiAmount)) continue;
 
-    trades.push({
+    const trade: ParsedTrade = {
       wallet,
       signature: tx.signature,
       mint: change.mint,
@@ -79,7 +80,45 @@ export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
       tokenDecimals: change.decimals,
       ...(dexProgramId ? { dexProgramId } : {}),
       ...(tx.blockTime == null ? {} : { timestamp: tx.blockTime * 1000 }),
-    });
+    };
+
+    const quoteChanges = [...changes.values()].filter(
+      (candidate) =>
+        candidate.wallet === wallet &&
+        Object.hasOwn(QUOTE_DECIMALS, candidate.mint) &&
+        candidate.after !== candidate.before,
+    );
+
+    if (quoteChanges.length === 1) {
+      const quote = quoteChanges[0];
+      if (quote) {
+        const quoteDelta = quote.after - quote.before;
+        if ((isBuy && quoteDelta < 0n) || (!isBuy && quoteDelta > 0n)) {
+          trade.quoteAmountRaw = (quoteDelta < 0n ? -quoteDelta : quoteDelta).toString();
+          trade.quoteMint = quote.mint;
+          trade.quoteDecimals = quote.decimals;
+          trade.quoteSource = "token_balance";
+          trade.quoteAmountIsEstimate = false;
+        }
+      }
+    } else if (quoteChanges.length === 0) {
+      const native = tx.nativeBalanceChanges?.find((item) => item.wallet === wallet);
+      if (native) {
+        let nativeDelta = BigInt(native.postLamports) - BigInt(native.preLamports);
+        if (wallet === tx.feePayer && tx.feeLamports) {
+          nativeDelta += BigInt(tx.feeLamports);
+        }
+        if ((isBuy && nativeDelta < 0n) || (!isBuy && nativeDelta > 0n)) {
+          trade.quoteAmountRaw = (nativeDelta < 0n ? -nativeDelta : nativeDelta).toString();
+          trade.quoteMint = SOL_MINT_LABEL;
+          trade.quoteDecimals = 9;
+          trade.quoteSource = "native_balance_estimate";
+          trade.quoteAmountIsEstimate = true;
+        }
+      }
+    }
+
+    trades.push(trade);
   }
 
   return trades;
