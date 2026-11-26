@@ -115,15 +115,16 @@ async function main(): Promise<void> {
       const rankings = rankWallets(performance);
       const eligible = rankings.filter((item) => item.eligible);
       const selected = selectWalletsForPaperTrading(rankings);
-      selectedWalletKeys = new Set(selected.map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
-      const persistentWatchlist = await selectionStore.sync(selected);
+      const persistentWatchlist = await selectionStore.sync(rankings, selected);
+      selectedWalletKeys = new Set(persistentWatchlist.filter((item) => item.active)
+        .map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
       logger.info(
         {
           historicalTradesLoaded: tradeStore.count(),
           performanceGroupsLoaded: performance.length,
           walletsWithEnoughData: eligible.length,
           topWallets: eligible.slice(0, 10),
-          selectedForPaperTrading: selected,
+          selectedForPaperTrading: persistentWatchlist.filter((item) => item.active),
           persistentWatchlist,
         },
         "Classement des wallets et sélection automatique Paper Trading (score minimum 65, maximum 10)",
@@ -189,8 +190,6 @@ async function main(): Promise<void> {
 
           if (paperEngine && historyResult.inserted && candidate.quoteMint) {
             const ranking = rankWallets(calculateWalletPerformance(tradeStore.list()));
-            const currentSelection = selectWalletsForPaperTrading(ranking);
-            selectedWalletKeys = new Set(currentSelection.map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
             const leader = ranking.find((item) =>
               item.wallet === candidate.wallet && item.quoteMint === candidate.quoteMint,
             );
