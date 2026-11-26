@@ -1,5 +1,4 @@
 import { ParsedTransaction, ParsedTrade, Side, TokenBalance } from "./types.js";
-import { logger } from "../core/logger.js";
 
 // Program IDs are used only as transaction labels. Their presence does not
 // prove that a wallet's token movement was a successful swap.
@@ -64,10 +63,6 @@ export function parseDexTrade(
 
   if (candidates.length === 0) return null;
   if (candidates.length > 1) {
-    logger.debug(
-      { signature: tx.signature, mints: candidates.map((item) => item.mint) },
-      "Transaction ambiguë : plusieurs tokens non-quote ont changé",
-    );
     return null;
   }
 
