@@ -5,7 +5,7 @@ import {
 } from "@solana/web3.js";
 import { config } from "../config/env.js";
 import { logger } from "../core/logger.js";
-import { parseTokenBalanceChanges } from "./balance-parser.js";
+import { parseTokenBalanceChanges, parseWalletTradeChanges } from "./balance-parser.js";
 import type { ParsedTrade, ParsedTransaction, TokenBalance } from "./types.js";
 
 interface RawTokenBalance {
@@ -74,6 +74,28 @@ export class TransactionDecoder {
         "Erreur lors du décodage de la transaction",
       );
       return null;
+    }
+  }
+
+  /**
+   * Decodes all unambiguous wallet token-balance changes in a transaction.
+   * Used by the opt-in DEX feed; this is candidate extraction, not proof of a swap.
+   */
+  async decodeWalletCandidates(signature: string): Promise<ParsedTrade[]> {
+    try {
+      const tx = await this.connection.getTransaction(signature, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+
+      if (!tx) return [];
+      return parseWalletTradeChanges(this.extractParsedTransaction(signature, tx));
+    } catch (error: unknown) {
+      logger.error(
+        { signature, error: this.getErrorMessage(error) },
+        "Erreur lors de l'extraction des wallets candidats",
+      );
+      return [];
     }
   }
 

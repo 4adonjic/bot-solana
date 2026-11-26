@@ -26,14 +26,23 @@ const envSchema = z.object({
     .default("info"),
   TARGET_WALLETS: z
     .string()
-    .min(1, "TARGET_WALLETS doit contenir au moins une cle publique")
+    .default("")
     .transform((value) =>
       value
         .split(",")
         .map((wallet) => wallet.trim())
         .filter((wallet) => wallet.length > 0),
     )
-    .pipe(z.array(base58PubkeySchema).min(1, "Au moins un wallet cible est requis")),
+    .pipe(z.array(base58PubkeySchema)),
+  ENABLE_DEX_DISCOVERY: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+}).superRefine((value, context) => {
+  if (!value.ENABLE_DEX_DISCOVERY && value.TARGET_WALLETS.length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["TARGET_WALLETS"],
+      message: "Configurez au moins un wallet ou activez ENABLE_DEX_DISCOVERY",
+    });
+  }
 });
 
 export type AppConfig = Readonly<{
@@ -41,6 +50,7 @@ export type AppConfig = Readonly<{
   rpcWsUrl: string;
   logLevel: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
   targetWallets: readonly string[];
+  enableDexDiscovery: boolean;
 }>;
 
 function loadConfig(): AppConfig {
@@ -58,6 +68,7 @@ function loadConfig(): AppConfig {
     rpcWsUrl: parsed.data.RPC_WS_URL,
     logLevel: parsed.data.LOG_LEVEL,
     targetWallets: parsed.data.TARGET_WALLETS,
+    enableDexDiscovery: parsed.data.ENABLE_DEX_DISCOVERY,
   };
 }
 
