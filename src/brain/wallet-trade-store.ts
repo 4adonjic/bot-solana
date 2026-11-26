@@ -145,6 +145,7 @@ export class WalletTradeStore {
       (item.quoteDecimals === undefined || (Number.isInteger(item.quoteDecimals) && item.quoteDecimals >= 0 && item.quoteDecimals <= 18)) &&
       (item.quoteSource === undefined || item.quoteSource === "token_balance" || item.quoteSource === "native_balance_estimate") &&
       (item.quoteAmountIsEstimate === undefined || typeof item.quoteAmountIsEstimate === "boolean") &&
+      (item.timestampIsEstimated === undefined || typeof item.timestampIsEstimated === "boolean") &&
       (item.dexProgramId === undefined || typeof item.dexProgramId === "string")
     );
   }
