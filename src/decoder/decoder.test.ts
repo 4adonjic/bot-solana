@@ -158,3 +158,34 @@ test("skips only the ambiguous wallet and keeps other wallet candidates", () => 
   assert.equal(trades.length, 1);
   assert.equal(trades[0]?.wallet, "clear-wallet");
 });
+
+test("strict wallet discovery rejects token movements without an exact quote balance", () => {
+  const trades = parseWalletTradeChanges(transaction(
+    [],
+    [balance(tokenMint, "2000000")],
+    {
+      nativeBalanceChanges: [{ wallet, preLamports: "5000000000", postLamports: "3999995000" }],
+      feeLamports: "5000",
+      feePayer: wallet,
+    },
+  ), { requireQuoteEvidence: true });
+  assert.equal(trades.length, 0);
+});
+
+test("strict wallet discovery keeps a swap with an exact WSOL quote balance", () => {
+  const trades = parseWalletTradeChanges(transaction(
+    [balance(wsolMint, "1000000000", 9)],
+    [balance(wsolMint, "750000000", 9), balance(tokenMint, "3000000")],
+  ), { requireQuoteEvidence: true });
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0]?.quoteSource, "token_balance");
+  assert.equal(trades[0]?.quoteAmountIsEstimate, false);
+});
+
+test("strict wallet discovery rejects quote movements in the wrong direction", () => {
+  const trades = parseWalletTradeChanges(transaction(
+    [balance(wsolMint, "500000000", 9)],
+    [balance(wsolMint, "750000000", 9), balance(tokenMint, "1000000")],
+  ), { requireQuoteEvidence: true });
+  assert.equal(trades.length, 0);
+});

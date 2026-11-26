@@ -89,7 +89,7 @@ export class TransactionDecoder {
       });
 
       if (!tx) return [];
-      return parseWalletTradeChanges(this.extractParsedTransaction(signature, tx));
+      return parseWalletTradeChanges(this.extractParsedTransaction(signature, tx), { requireQuoteEvidence: true });
     } catch (error: unknown) {
       logger.error(
         { signature, error: this.getErrorMessage(error) },

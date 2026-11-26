@@ -7,6 +7,11 @@ const QUOTE_DECIMALS: Record<string, number> = {
 };
 const SOL_MINT_LABEL = "SOL";
 
+export interface WalletTradeParseOptions {
+  /** Keep only movements with a direction-consistent quote-asset delta. */
+  requireQuoteEvidence?: boolean;
+}
+
 interface BalanceChange {
   wallet: string;
   mint: string;
@@ -21,7 +26,10 @@ interface BalanceChange {
  * consistent with the acquired/sold token. Native SOL is explicitly marked
  * as an estimate because rent and unrelated SOL transfers can affect it.
  */
-export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
+export function parseWalletTradeChanges(
+  tx: ParsedTransaction,
+  options: WalletTradeParseOptions = {},
+): ParsedTrade[] {
   const changes = new Map<string, BalanceChange>();
 
   const addBalances = (balances: TokenBalance[], side: "before" | "after") => {
@@ -119,6 +127,13 @@ export function parseWalletTradeChanges(tx: ParsedTransaction): ParsedTrade[] {
         }
       }
     }
+
+    if (options.requireQuoteEvidence && (
+      !trade.quoteAmountRaw ||
+      !trade.quoteMint ||
+      trade.quoteSource !== "token_balance" ||
+      trade.quoteAmountIsEstimate !== false
+    )) continue;
 
     trades.push(trade);
   }
