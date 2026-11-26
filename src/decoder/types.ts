@@ -57,6 +57,9 @@ export interface ParsedTrade {
   /** Exact integer token amount; this is authoritative for precision. */
   tokenAmountRaw: string;
   tokenDecimals: number;
+  /** Aggregated wallet token balance immediately before and after this transaction. */
+  tokenBalanceBeforeRaw?: string;
+  tokenBalanceAfterRaw?: string;
   /** Quote spent (buy) or received (sell), in quoteMint's smallest unit. */
   quoteAmountRaw?: string;
   quoteMint?: string;
