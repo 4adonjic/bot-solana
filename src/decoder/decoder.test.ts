@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTokenBalanceChanges } from "./decoder.js";
+import { parseTokenBalanceChanges } from "./balance-parser.js";
 import type { ParsedTransaction, TokenBalance } from "./types.js";
 
 const wallet = "wallet-A";
