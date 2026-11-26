@@ -88,7 +88,7 @@ test("estimates SOL quote amount after excluding the transaction fee", () => {
     [],
     [balance(tokenMint, "2000000")],
     {
-      nativeBalanceChanges: [{ wallet, preLamports: "5000000000", postLamports: "3999000000" }],
+      nativeBalanceChanges: [{ wallet, preLamports: "5000000000", postLamports: "3999995000" }],
       feeLamports: "5000",
       feePayer: wallet,
     },
