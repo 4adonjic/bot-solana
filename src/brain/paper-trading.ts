@@ -62,7 +62,7 @@ const DEFAULT_ASSETS: readonly PaperQuoteAsset[] = [
 /**
  * Local paper portfolio. It never creates, signs, or submits Solana transactions.
  * Entries use a fixed quote budget. Sells copy the leader position fraction using
- * exact pre/post aggregate token balances; ambiguous sells are rejected.
+ * transaction-visible pre/post token balances; ambiguous sells are rejected.
  * Source quote movements must be exact token deltas. Prices remain a source-price proxy.
  */
 export class PaperTradingEngine {
