@@ -72,6 +72,8 @@ export function parseDexTrade(
   }
 
   const item = candidates[0];
+  if (!item) return null;
+
   const side: Side = item.delta > 0n ? "buy" : "sell";
   const rawAmount = (item.delta > 0n ? item.delta : -item.delta).toString();
   const uiAmount = Number(rawAmount) / 10 ** item.decimals;
@@ -86,7 +88,7 @@ export function parseDexTrade(
     amountOut: side === "sell" ? uiAmount : 0,
     tokenAmountRaw: rawAmount,
     tokenDecimals: item.decimals,
-    dexProgramId: detectDexProgram(tx),
-    timestamp: tx.blockTime == null ? undefined : tx.blockTime * 1000,
+    ...(detectDexProgram(tx) ? { dexProgramId: detectDexProgram(tx)! } : {}),
+    ...(tx.blockTime == null ? {} : { timestamp: tx.blockTime * 1000 }),
   };
 }
