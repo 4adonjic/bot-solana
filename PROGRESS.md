@@ -22,6 +22,7 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 - `src/brain/security-pipeline.ts` : orchestration des contrôles de sécurité.
 - `src/brain/security-cache.ts` : cache temporaire et mutualisation des analyses par mint.
 - `src/brain/concurrency-limit.ts` : limiteur de concurrence avec file d'attente bornée.
+- `src/brain/wallet-candidate-store.ts` : registre persistant des wallets candidats, observations dédupliquées et bornées.
 - `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
@@ -35,16 +36,15 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - GitHub Actions a validé `npm ci`, `npm run typecheck` et `npm run build`.
 - À tester encore avec une vraie connexion RPC et un wallet qui effectue une transaction. La reconnexion en cas de coupure réseau n'a pas encore été validée en conditions réelles.
 
-## Module 2 – Décodeur
-- Fusionné dans `main` via la PR #2.
+## Module 2 – Décodeur et découverte
+- Fusionné dans `main) via les PR #2 et #11.
 - Les soldes pré- et post-transaction sont agrégés par wallet + mint, y compris les comptes créés ou fermés.
 - Les variations utilisent `BigInt` sur les montants bruts ; le résultat expose `tokenAmountRaw` et `tokenDecimals`.
 - Les instructions de haut niveau et internes sont normalisées, y compris pour les transactions versionnées.
 - Les mints WSOL et USDC sont ignorés comme actifs de cotation dans cette première heuristique.
 - Les transactions ambiguës avec plusieurs tokens non-quote modifiés sont écartées.
-- La PR #11 ajoute `wallet` au trade décodé et un extracteur de variations non ambiguës pour tous les propriétaires présents dans une transaction.
-- La branche de travail actuelle ajoute un flux WebSocket DEX activable avec `ENABLE_DEX_DISCOVERY=true`, et journalise les wallets candidats extraits des transactions DEX. Le flux est désactivé par défaut ; en mode DEX seul, aucun `TARGET_WALLETS` manuel n'est nécessaire.
-- Limites : les mouvements de tokens ne prouvent pas à eux seuls un swap DEX ; les program IDs DEX doivent être revérifiés ; les résultats doivent être comparés à des transactions réelles avant toute utilisation. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
+- Le flux DEX optionnel (PR #12) repère les wallets inconnus qui présentent des variations de soldes dans des transactions touchant les programmes surveillés.
+- Limites : une transaction qui invoque un programme DEX n'est pas forcément un swap ; les variations de soldes restent des candidats heuristiques. `amountIn` / `amountOut` représentent actuellement la quantité du token suivi, pas la quantité de SOL/stablecoin dépensée ou reçue.
 
 ## Module 3 – Sécurité des tokens
 - Scoring heuristique sur 100 : autorités mint/freeze, liquidité, concentration des 10 plus gros détenteurs, nombre de détenteurs.
@@ -54,20 +54,26 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - `liquidity.ts` interroge l'API DEX Screener et conserve la plus grosse liquidité d'un pool Solana associé au mint (PR #6 fusionnée).
 - `security-pipeline.ts` rassemble les trois sources et journalise le résultat après le décodage (PR #7 fusionnée).
 - `security-cache.ts` met en cache les analyses par mint pendant 60 secondes, mutualise les appels simultanés et conserve au maximum 500 entrées (PR #8 fusionnée).
-- La PR #9 ajoute une limite de deux analyses simultanées pour des mints différents et une file d'attente maximale de 100 demandes.
-- La PR #10 place le cache avant la file d'attente afin de mutualiser les demandes identiques avant qu'elles consomment une place.
+- Les PR #9 et #10 limitent la concurrence et mutualisent les analyses identiques.
 - Tests unitaires présents pour les calculs, les collecteurs, le cache et le limiteur de concurrence.
-- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; une première analyse d'un nouveau mint déclenche toujours les appels RPC/API. Aucun achat réel n'est activé.
+- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; aucune exécution réelle n'est activée.
+
+## Module 3 bis – Registre des wallets candidats
+- La PR #13 ajoute un registre JSON persistant dans `data/wallet-candidates.json`, chargé au démarrage lorsque la découverte DEX est activée.
+- Chaque wallet conserve ses dates de première/dernière détection, son nombre d'observations et ses transactions récentes.
+- Les observations répétées (même signature + mint pour le même wallet) sont dédupliquées.
+- Le nombre de wallets conservés, les observations récentes et les clés de déduplication sont bornés.
+- Le dossier `data/` est ignoré par Git : les données de fonctionnement ne sont pas envoyées au dépôt.
+- Ce registre ne calcule pas encore de PnL et ne qualifie pas les wallets de rentables.
 
 ## Roadmap restante
-- Module 3 : améliorer l'identification des coffres de pools et valider les métriques sur des mints/transactions réels.
-- Module 3 bis : persister les wallets candidats, dédupliquer leurs observations sur la durée, puis les classer sur une fenêtre d'observation avec PnL réalisé/virtuel, fréquence, pertes maximales et échantillon minimum. Ne pas ajouter automatiquement un wallet au copy-trading avant validation.
-- Limites du flux DEX : l'écoute de programmes détecte des transactions qui les invoquent, pas uniquement des swaps ; les variations de soldes restent des candidats heuristiques. Vérifier la charge et les limites WebSocket du fournisseur RPC avant activation.
+- Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
+- Ajouter un historique de performance fiable : coût d'entrée/sortie en SOL, frais, PnL réalisé/virtuel, drawdown et échantillon minimum.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
-- Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
+- Module 5 : exécution réelle uniquement après tests et sécurités validés, avec limites strictes et kill-switch.
 
 ## Consignes de travail
 - Une étape à la fois, expliquer le but avant les modifications.
 - Une commande à la fois ; attendre le résultat avant de poursuivre.
-- Ne jamais committer le fichier `.env` ni les clés RPC privées.
+- Ne jamais committer le fichier `.env`, les clés RPC privées ou les données locales du dossier `data/`.
 - Ne jamais activer d'exécution réelle sans tests et sécurités validés.
