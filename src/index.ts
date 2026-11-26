@@ -11,6 +11,7 @@ import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
 import { WalletTradeStore } from "./brain/wallet-trade-store.js";
 import { calculateWalletPerformance } from "./brain/wallet-performance.js";
 import { rankWallets } from "./brain/wallet-ranking.js";
+import { selectWalletsForPaperTrading, walletSelectionKey } from "./brain/wallet-selection.js";
 import { PaperTradingEngine } from "./brain/paper-trading.js";
 
 async function main(): Promise<void> {
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
     const tradeStore = new WalletTradeStore();
     await tradeStore.init();
     const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
+    let selectedWalletKeys = new Set<string>();
     if (paperEngine) {
       await paperEngine.init();
       const paperSnapshot = paperEngine.snapshot();
@@ -109,14 +111,17 @@ async function main(): Promise<void> {
       const performance = calculateWalletPerformance(tradeStore.list());
       const rankings = rankWallets(performance);
       const eligible = rankings.filter((item) => item.eligible);
+      const selected = selectWalletsForPaperTrading(rankings);
+      selectedWalletKeys = new Set(selected.map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
       logger.info(
         {
           historicalTradesLoaded: tradeStore.count(),
           performanceGroupsLoaded: performance.length,
           walletsWithEnoughData: eligible.length,
           topWallets: eligible.slice(0, 10),
+          selectedForPaperTrading: selected,
         },
-        "Classement des wallets (PnL brut, cotation séparée, échantillon minimum)",
+        "Classement des wallets et sélection automatique Paper Trading (score minimum 65, maximum 10)",
       );
     };
     logger.info(
@@ -182,10 +187,10 @@ async function main(): Promise<void> {
             const leader = ranking.find((item) =>
               item.wallet === candidate.wallet && item.quoteMint === candidate.quoteMint,
             );
-            if (!leader?.eligible) {
+            if (!leader?.eligible || !selectedWalletKeys.has(walletSelectionKey(candidate.wallet, candidate.quoteMint))) {
               logger.debug(
                 { wallet: candidate.wallet, quoteMint: candidate.quoteMint, matchedSells: leader?.matchedSellCount ?? 0, activeDays: leader?.activeDays ?? 0 },
-                "Paper Trading ignoré : wallet pas encore assez documenté",
+                "Paper Trading ignoré : wallet non retenu par la sélection automatique (échantillon, rentabilité ou score insuffisant)",
               );
             } else {
               const security = await analyzeCachedSecurity(candidate.mint);
