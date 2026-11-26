@@ -89,6 +89,15 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - La limite par défaut est de 100 000 transactions ; à capacité atteinte, les nouvelles écritures sont refusées explicitement au lieu de supprimer l'ancien historique.
 - Le stockage reste local dans `data/`, ignoré par Git. Seules les transactions observées après activation de la découverte seront ajoutées ; aucun historique antérieur n'est reconstitué automatiquement.
 
+## Classement des performances des wallets
+- La PR #17 ajoute un classement séparé par actif de cotation (WSOL et USDC ne sont jamais additionnés entre eux).
+- Les performances FIFO sont recalculées dans l'ordre des slots Solana, plutôt que dans l'ordre d'arrivée des callbacks WebSocket.
+- Chaque groupe expose les ventes gagnantes/perdantes, le PnL brut, le profit factor, le taux de réussite et la régularité par jour.
+- Les timestamps estimés à l'heure de détection ne comptent pas dans les statistiques de régularité.
+- Un wallet n'est classé que s'il possède au moins 10 ventes rapprochées et 3 jours d'activité avec horodatage fiable ; sinon il reste en « échantillon insuffisant ».
+- Le classement est journalisé au démarrage puis toutes les 100 nouvelles observations réellement ajoutées.
+- Limites : PnL brut avant frais, détection de swaps encore heuristique, résultats non convertis en valeur fiat commune, et aucun ordre réel exécuté.
+
 ## Roadmap restante
 - Valider les extractions sur des transactions réelles et améliorer l'identification des swaps.
 - Ajouter un historique de performance fiable : coût d'entrée/sortie en SOL, frais, PnL réalisé/virtuel, drawdown et échantillon minimum.
