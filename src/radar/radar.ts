@@ -2,10 +2,6 @@ import { Connection, Context, Logs, PublicKey } from "@solana/web3.js";
 import { config } from "../config/env.js";
 import { logger } from "../core/logger.js";
 
-// --- Types & contrats ---
-
-export type OnTransaction = (signature: string, slot: number, accountChanges: AccountChange[]) => void;
-
 export interface AccountChange {
   pubkey: string;
   lamports: number;
@@ -13,36 +9,55 @@ export interface AccountChange {
   after?: string[];
 }
 
+export type OnTransaction = (
+  signature: string,
+  slot: number,
+  accountChanges: AccountChange[],
+) => void;
+
 export interface RadarOptions {
-  name?: string;
   wsRpcUrlOverride?: string;
   initialBackoffMs?: number;
+  maxBackoffMs?: number;
   maxAttempts?: number;
   commitment?: "finalized" | "confirmed" | "processed";
 }
 
+/**
+ * Écoute les logs de chaque wallet cible.
+ *
+ * web3.js gère la reconnexion de son WebSocket. Cette classe gère les erreurs
+ * lors de la création initiale des abonnements et leur nettoyage à l'arrêt.
+ */
 export class Radar {
-  private connection: Connection;
-  private wsRpcUrl: string;
-  private targetWallets: readonly string[];
-  private commitment: "finalized" | "confirmed" | "processed";
+  private readonly connection: Connection;
+  private readonly targetWallets: readonly string[];
+  private readonly commitment: "finalized" | "confirmed" | "processed";
+  private readonly maxAttempts: number;
+  private readonly initialBackoffMs: number;
+  private readonly maxBackoffMs: number;
+  private readonly subscriptions = new Map<number, string>();
+
   private onTransaction?: OnTransaction;
-  private attempts = 0;
-  private maxAttempts: number;
-  private initialBackoffMs: number;
   private isRunning = false;
 
   constructor(options: RadarOptions = {}) {
-    this.wsRpcUrl = options.wsRpcUrlOverride ?? config.rpcWsUrl;
-    this.targetWallets = config.targetWallets;
+    const wsRpcUrl = options.wsRpcUrlOverride ?? config.rpcWsUrl;
+
+    this.targetWallets = [...new Set(config.targetWallets)];
     this.commitment = options.commitment ?? "confirmed";
     this.maxAttempts = options.maxAttempts ?? 10;
-    this.initialBackoffMs = options.initialBackoffMs ?? 2000;
-    this.connection = new Connection(config.rpcHttpUrl, this.commitment);
+    this.initialBackoffMs = options.initialBackoffMs ?? 2_000;
+    this.maxBackoffMs = options.maxBackoffMs ?? 30_000;
+
+    this.connection = new Connection(config.rpcHttpUrl, {
+      commitment: this.commitment,
+      wsEndpoint: wsRpcUrl,
+    });
   }
 
-  setOnTransaction(cb: OnTransaction): void {
-    this.onTransaction = cb;
+  setOnTransaction(callback: OnTransaction): void {
+    this.onTransaction = callback;
   }
 
   async start(): Promise<void> {
@@ -50,86 +65,129 @@ export class Radar {
       logger.warn({}, "Radar déjà en cours d'exécution");
       return;
     }
+
     this.isRunning = true;
-    this.attempts = 0;
-    logger.info({ wsUrl: this.wsRpcUrl, targetWallets: this.targetWallets }, "Radar démarré");
-    await this._subscribeLoop();
+    logger.info(
+      { targetWallets: this.targetWallets, walletCount: this.targetWallets.length },
+      "Démarrage du radar Solana",
+    );
+
+    await this.subscribeWithRetry();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
+    if (!this.isRunning && this.subscriptions.size === 0) {
+      return;
+    }
+
     this.isRunning = false;
-    logger.info({}, "Radar arrêté");
+
+    const subscriptionIds = [...this.subscriptions.keys()];
+    this.subscriptions.clear();
+
+    const results = await Promise.allSettled(
+      subscriptionIds.map((id) => this.connection.removeOnLogsListener(id)),
+    );
+
+    const failedRemovals = results.filter((result) => result.status === "rejected");
+    if (failedRemovals.length > 0) {
+      logger.warn(
+        { failedCount: failedRemovals.length },
+        "Certaines souscriptions du radar n'ont pas pu être supprimées",
+      );
+    }
+
+    logger.info({ removedSubscriptions: subscriptionIds.length }, "Radar arrêté");
   }
 
-  private async _subscribeLoop(): Promise<void> {
-    while (this.isRunning) {
+  private async subscribeWithRetry(): Promise<void> {
+    for (let attempt = 1; attempt <= this.maxAttempts && this.isRunning; attempt += 1) {
       try {
-        this.attempts += 1;
-        await this._doSubscribe();
+        await this.subscribeAllWallets();
+        logger.info(
+          { subscriptionCount: this.subscriptions.size },
+          "Tous les wallets cibles sont surveillés",
+        );
+        return;
       } catch (error: unknown) {
-        logger.error({ attempt: this.attempts, error: (error as Error).message }, "Erreur lors de l'abonnement logsSubscribe");
+        await this.removeAllSubscriptions();
 
-        if (this.attempts >= this.maxAttempts) {
-          logger.fatal({ attempt: this.attempts, maxAttempts: this.maxAttempts }, "Nombre maximal de tentatives atteint. Arrêt du radar.");
-          this.stop();
-          process.exit(1);
-          return;
+        logger.error(
+          { attempt, error: this.getErrorMessage(error) },
+          "Échec de création des abonnements logsSubscribe",
+        );
+
+        if (attempt === this.maxAttempts) {
+          this.isRunning = false;
+          logger.fatal(
+            { maxAttempts: this.maxAttempts },
+            "Nombre maximal de tentatives atteint : le radar ne peut pas démarrer",
+          );
+          throw error;
         }
 
-        const backoff = this.initialBackoffMs * 2 ** (this.attempts - 1);
-        logger.info({ attempt: this.attempts, backoffMs: backoff }, "Attente avant nouvelle tentative");
-        await this._sleep(backoff);
+        const backoffMs = Math.min(
+          this.initialBackoffMs * 2 ** (attempt - 1),
+          this.maxBackoffMs,
+        );
+
+        logger.info({ attempt, backoffMs }, "Nouvelle tentative de connexion du radar");
+        await this.sleep(backoffMs);
       }
     }
   }
 
-  private async _doSubscribe(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      // LogsFilter = PublicKey | 'all' | 'allWithVotes'
-      // On surveille un seul wallet cible pour l'instant ; le bot créera un Radar par wallet ensuite.
-      const filter: PublicKey = new PublicKey(this.targetWallets[0] ?? "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
+  private async subscribeAllWallets(): Promise<void> {
+    if (this.targetWallets.length === 0) {
+      throw new Error("Aucun wallet cible n'est configuré");
+    }
 
-      const subId = this.connection.onLogs(
-        filter,
-        (logs: Logs, ctx: Context) => {
+    for (const walletAddress of this.targetWallets) {
+      if (!this.isRunning) {
+        return;
+      }
+
+      const wallet = new PublicKey(walletAddress);
+      const subscriptionId = this.connection.onLogs(
+        wallet,
+        (logs: Logs, context: Context) => {
+          if (!logs?.signature) {
+            return;
+          }
+
           try {
-            if (!logs?.logs) {
-              return;
-            }
-            const signature = logs.signature;
-            const slot = ctx.slot;
-            this.onTransaction?.(signature, slot, []);
-          } catch (err: unknown) {
-            logger.error({ error: (err as Error).message }, "Erreur dans le callback onTransaction du radar");
+            this.onTransaction?.(logs.signature, context.slot, []);
+          } catch (error: unknown) {
+            logger.error(
+              { wallet: walletAddress, error: this.getErrorMessage(error) },
+              "Erreur dans le callback de transaction du radar",
+            );
           }
         },
         this.commitment,
       );
 
-      // Simule une déconnexion après 10s pour tester la reconnexion
-      // En prod, la déconnexion viendra du serveur (close/error events)
-      setTimeout(async () => {
-        try {
-          await this.connection.removeOnLogsListener(subId);
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      }, 10000);
-    });
+      this.subscriptions.set(subscriptionId, walletAddress);
+      logger.debug({ wallet: walletAddress, subscriptionId }, "Wallet ajouté à la surveillance");
+    }
   }
 
-  private _sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  private async removeAllSubscriptions(): Promise<void> {
+    const subscriptionIds = [...this.subscriptions.keys()];
+    this.subscriptions.clear();
+
+    await Promise.allSettled(
+      subscriptionIds.map((id) => this.connection.removeOnLogsListener(id)),
+    );
+  }
+
+  private sleep(milliseconds: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
 
 export const defaultRadar = new Radar();
-defaultRadar.setOnTransaction(
-  (signature, slot, accountChanges) => {
-    logger.info(
-      { signature, slot, accountChangesCount: accountChanges.length },
-      "Transaction détectée par le radar",
-    );
-  },
-);
