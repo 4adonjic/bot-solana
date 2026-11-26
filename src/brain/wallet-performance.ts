@@ -26,6 +26,8 @@ export interface WalletPerformance {
   matchedSellCount: number;
   profitableSellCount: number;
   losingSellCount: number;
+  grossProfitRaw: string;
+  grossLossRaw: string;
   boughtTokenRaw: string;
   soldTokenRaw: string;
   matchedSoldTokenRaw: string;
@@ -54,6 +56,8 @@ interface MutablePerformance {
   matchedSellCount: number;
   profitableSellCount: number;
   losingSellCount: number;
+  grossProfit: bigint;
+  grossLoss: bigint;
   boughtToken: bigint;
   soldToken: bigint;
   matchedSoldToken: bigint;
@@ -116,6 +120,8 @@ export function calculateWalletPerformance(
         matchedSellCount: 0,
         profitableSellCount: 0,
         losingSellCount: 0,
+        grossProfit: 0n,
+        grossLoss: 0n,
         boughtToken: 0n,
         soldToken: 0n,
         matchedSoldToken: 0n,
@@ -165,8 +171,14 @@ export function calculateWalletPerformance(
       group.matchedSellCount++;
       group.matchedSoldToken += matchedQuantity;
       group.realizedPnl += matchedPnl;
-      if (matchedPnl > 0n) group.profitableSellCount++;
-      if (matchedPnl < 0n) group.losingSellCount++;
+      if (matchedPnl > 0n) {
+        group.profitableSellCount++;
+        group.grossProfit += matchedPnl;
+      }
+      if (matchedPnl < 0n) {
+        group.losingSellCount++;
+        group.grossLoss += -matchedPnl;
+      }
 
       if (trade.timestampIsEstimated !== true) {
         const timestamp = Date.parse(trade.observedAt);
@@ -192,6 +204,8 @@ export function calculateWalletPerformance(
       matchedSellCount: group.matchedSellCount,
       profitableSellCount: group.profitableSellCount,
       losingSellCount: group.losingSellCount,
+      grossProfitRaw: group.grossProfit.toString(),
+      grossLossRaw: group.grossLoss.toString(),
       boughtTokenRaw: group.boughtToken.toString(),
       soldTokenRaw: group.soldToken.toString(),
       matchedSoldTokenRaw: group.matchedSoldToken.toString(),
