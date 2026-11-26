@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseTokenBalanceChanges } from "./balance-parser.js";
+import { parseTokenBalanceChanges, parseWalletTradeChanges } from "./balance-parser.js";
 import type { ParsedTransaction, TokenBalance } from "./types.js";
 
 const wallet = "wallet-A";
@@ -46,6 +46,7 @@ test("detects a buy when a new token account appears", () => {
   );
 
   assert.ok(trade);
+  assert.equal(trade.wallet, wallet);
   assert.equal(trade.side, "buy");
   assert.equal(trade.mint, tokenMint);
   assert.equal(trade.tokenAmountRaw, "2500000");
@@ -132,4 +133,41 @@ test("keeps the transaction timestamp when it is available", () => {
 
   assert.ok(trade);
   assert.equal(trade.timestamp, 1_700_000_000_000);
+});
+
+test("extracts unambiguous trades for multiple wallets in one transaction", () => {
+  const trades = parseWalletTradeChanges(
+    transaction(
+      [balance(tokenMint, "1000000", 6, "wallet-A")],
+      [
+        balance(tokenMint, "2000000", 6, "wallet-A"),
+        balance("TokenMintB", "5000000", 6, "wallet-B"),
+      ],
+    ),
+  );
+
+  assert.equal(trades.length, 2);
+  assert.deepEqual(
+    trades.map(({ wallet: owner, mint, side }) => ({ wallet: owner, mint, side })),
+    [
+      { wallet: "wallet-A", mint: tokenMint, side: "buy" },
+      { wallet: "wallet-B", mint: "TokenMintB", side: "buy" },
+    ],
+  );
+});
+
+test("skips only the ambiguous wallet and keeps other wallet candidates", () => {
+  const trades = parseWalletTradeChanges(
+    transaction(
+      [],
+      [
+        balance("TokenMintA", "1000000", 6, "ambiguous-wallet"),
+        balance("TokenMintB", "2000000", 6, "ambiguous-wallet"),
+        balance(tokenMint, "3000000", 6, "clear-wallet"),
+      ],
+    ),
+  );
+
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0]?.wallet, "clear-wallet");
 });
