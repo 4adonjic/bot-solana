@@ -20,6 +20,7 @@ Bot TypeScript (Node.js) qui surveille des wallets Solana, décode leurs transac
 - `src/brain/liquidity.ts` : collecte de liquidité USD via DEX Screener.
 - `src/brain/security-pipeline.ts` : orchestration des contrôles de sécurité.
 - `src/brain/security-cache.ts` : cache temporaire et mutualisation des analyses par mint.
+- `src/brain/concurrency-limit.ts` : limiteur de concurrence avec file d'attente bornée.
 - `src/shadow/`, `src/executor/` : étapes futures.
 
 ## Règle TypeScript NodeNext
@@ -49,12 +50,13 @@ Les imports relatifs doivent finir par `.js`, même si les fichiers source sont 
 - Les statistiques de détenteurs sont récupérées dans `holder-stats.ts` : agrégation par propriétaire et part cumulée des 10 plus gros (PR #5 fusionnée).
 - `liquidity.ts` interroge l'API DEX Screener et conserve la plus grosse liquidité d'un pool Solana associé au mint (PR #6 fusionnée).
 - `security-pipeline.ts` rassemble les trois sources et journalise le résultat après le décodage (PR #7 fusionnée).
-- La PR #8 ajoute un cache par mint de 60 secondes, partage les analyses simultanées du même mint et limite le cache à 500 entrées. Les analyses en erreur ne sont pas conservées.
-- Tests unitaires présents pour les calculs, les collecteurs et le cache.
-- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; une première analyse d'un nouveau mint déclenche toujours les appels RPC/API. Le cache ne remplace pas une limitation globale du débit RPC. Aucun achat réel n'est activé.
+- `security-cache.ts` met en cache les analyses par mint pendant 60 secondes, mutualise les appels simultanés et conserve au maximum 500 entrées (PR #8 fusionnée).
+- La PR #9 ajoute une limite de deux analyses simultanées pour des mints différents et une file d'attente maximale de 100 demandes. Les demandes au-delà de cette limite échouent proprement et sont journalisées par le radar.
+- Tests unitaires présents pour les calculs, les collecteurs, le cache et le limiteur de concurrence.
+- Limites : les coffres de pools peuvent fausser les statistiques de détenteurs ; la liquidité DEX Screener reste indicative ; une première analyse d'un nouveau mint déclenche toujours les appels RPC/API. La file bornée évite une accumulation infinie, mais ses limites devront être ajustées selon le fournisseur RPC. Aucun achat réel n'est activé.
 
 ## Roadmap restante
-- Module 3 : limiter la concurrence globale, améliorer l'identification des coffres de pools et valider les métriques sur des mints/transactions réels.
+- Module 3 : améliorer l'identification des coffres de pools et valider les métriques sur des mints/transactions réels.
 - Module 4 : shadow bot (historique, PnL virtuel, TP/SL).
 - Module 5 : exécution (swap, frais prioritaires, slippage, limites et kill-switch).
 
