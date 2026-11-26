@@ -6,14 +6,14 @@ const dataDirectory = process.env.BOT_DATA_DIR || path.resolve(__dirname, '..', 
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1280, height: 820, minWidth: 960, minHeight: 640,
-    title: 'Bot Solana — Console', backgroundColor: '#0b1020', autoHideMenuBar: true,
+    width: 1440, height: 920, minWidth: 850, minHeight: 620,
+    title: 'Solana Bot — Console', backgroundColor: '#090d18', autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false, sandbox: true,
     },
   });
-  win.loadFile('index.html');
+  win.loadFile(path.join(__dirname, 'dist', 'index.html'));
 }
 
 ipcMain.handle('dashboard:get-snapshot', async () => loadDashboardSnapshot(dataDirectory));

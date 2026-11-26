@@ -21,13 +21,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Install dependencies
+      - name: Install bot dependencies
         run: npm ci
       - name: Decoder unit tests
         run: npm test
+      - name: Install GUI dependencies
+        working-directory: interface graphique/bot-gui
+        run: npm install
       - name: GUI data adapter tests
-        run: node --test 'interface graphique/bot-gui/dashboard-data.test.cjs'
+        working-directory: interface graphique/bot-gui
+        run: npm test
+      - name: GUI TypeScript and Vite build
+        working-directory: interface graphique/bot-gui
+        run: npm run build:web
       - name: TypeScript typecheck
         run: npm run typecheck
-      - name: Build
+      - name: Build bot
         run: npm run build
