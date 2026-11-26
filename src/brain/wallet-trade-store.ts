@@ -24,7 +24,7 @@ export class WalletTradeStore {
   private readonly filePath: string;
   private readonly maxTrades: number;
   private readonly trades: WalletTradeObservation[] = [];
-  private readonly keys = new Set<string>();
+  private readonly keys = new Map<string, WalletTradeObservation>();
   private writeQueue: Promise<void> = Promise.resolve();
   private initialized = false;
 
@@ -69,7 +69,7 @@ export class WalletTradeStore {
       if (this.trades.length >= this.maxTrades) {
         throw new Error(`Wallet trade history exceeds maxTrades (${this.maxTrades})`);
       }
-      this.keys.add(key);
+      this.keys.set(key, parsed);
       this.trades.push(parsed);
     }
 
@@ -83,7 +83,7 @@ export class WalletTradeStore {
     }
 
     const key = this.keyOf(observation);
-    const existing = this.trades.find((trade) => this.keyOf(trade) === key);
+    const existing = this.keys.get(key);
     if (existing) return { observation: existing, inserted: false };
     if (this.trades.length >= this.maxTrades) {
       throw new Error(`Wallet trade history is full (maxTrades: ${this.maxTrades})`);
@@ -91,13 +91,13 @@ export class WalletTradeStore {
 
     const write = async () => {
       // Re-check inside the queue to prevent concurrent duplicate appends.
-      const duplicate = this.trades.find((trade) => this.keyOf(trade) === key);
+      const duplicate = this.keys.get(key);
       if (duplicate) return duplicate;
       if (this.trades.length >= this.maxTrades) {
         throw new Error(`Wallet trade history is full (maxTrades: ${this.maxTrades})`);
       }
       await appendFile(this.filePath, `${JSON.stringify(observation)}\n`, "utf8");
-      this.keys.add(key);
+      this.keys.set(key, observation);
       this.trades.push(observation);
       return observation;
     };
