@@ -6,7 +6,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build:web": "tsc -b && vite build",
+    "build:web": "tsc --noEmit && vite build",
     "start": "electron .",
     "test": "node --test dashboard-data.test.cjs",
     "dist:win": "npm run build:web && electron-builder --win nsis portable"
@@ -28,13 +28,7 @@
     "appId": "fr.solanabot.desktop",
     "productName": "Solana Bot",
     "directories": { "output": "release" },
-    "files": [
-      "main.js",
-      "preload.js",
-      "dashboard-data.cjs",
-      "dist/**/*",
-      "package.json"
-    ],
+    "files": ["main.js", "preload.js", "dashboard-data.cjs", "dist/**/*", "package.json"],
     "win": {
       "target": ["nsis", "portable"],
       "artifactName": "Solana-Bot-${version}-${arch}.${ext}"
