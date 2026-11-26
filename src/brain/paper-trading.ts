@@ -224,7 +224,7 @@ export class PaperTradingEngine {
       }
       if (
         trade.tokenBalanceBeforeRaw === undefined || trade.tokenBalanceAfterRaw === undefined ||
-        !/^\\d+$/.test(trade.tokenBalanceBeforeRaw) || !/^\\d+$/.test(trade.tokenBalanceAfterRaw)
+        !/^\d+$/.test(trade.tokenBalanceBeforeRaw) || !/^\d+$/.test(trade.tokenBalanceAfterRaw)
       ) {
         return { executed: false, reason: "missing_leader_position_balances_for_proportional_sell" };
       }
