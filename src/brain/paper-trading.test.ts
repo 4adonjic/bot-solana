@@ -41,7 +41,7 @@ function sourceTrade(
 
 async function withEngine(
   run: (engine: PaperTradingEngine, filePath: string) => Promise<void>,
-  options: Pick<PaperTradingOptions, "maxPositionPercent"> = {},
+  options: Pick<PaperTradingOptions, "maxPositionPercent" | "maxDailyLossPercent"> = {},
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "solana-paper-"));
   const filePath = join(directory, "paper.json");
@@ -309,4 +309,54 @@ test("caps each token position at 20% of its initial quote balance and releases 
     assert.equal(allowedAgain.executed, true);
     if (allowedAgain.executed) assert.equal(allowedAgain.position?.costBasisRaw, "2000");
   });
+});
+
+
+test("stops new buys after the daily realized loss limit but still permits sells", async () => {
+  await withEngine(async (engine) => {
+    const buyLossPosition = await engine.processTrade(sourceTrade("buy", "daily-loss-buy"));
+    const buyOpenPosition = await engine.processTrade(sourceTrade("buy", "daily-open-buy", {
+      mint: "SecondTokenMint",
+    }));
+    assert.equal(buyLossPosition.executed, true);
+    assert.equal(buyOpenPosition.executed, true);
+
+    const lossExit = await engine.processTrade(sourceTrade("sell", "daily-loss-sell", {
+      quoteAmountRaw: "50",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "0",
+    }));
+    assert.equal(lossExit.executed, true);
+    if (!lossExit.executed) return;
+    assert.equal(lossExit.fill.realizedPnlRaw, "-519");
+
+    const blockedBuy = await engine.processTrade(sourceTrade("buy", "daily-loss-blocked-buy", {
+      mint: "ThirdTokenMint",
+    }));
+    assert.deepEqual(blockedBuy, { executed: false, reason: "daily_loss_limit_reached" });
+
+    const allowedSell = await engine.processTrade(sourceTrade("sell", "daily-open-sell", {
+      mint: "SecondTokenMint",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "0",
+      quoteAmountRaw: "120",
+    }));
+    assert.equal(allowedSell.executed, true);
+  }, { maxPositionPercent: 100, maxDailyLossPercent: 5 });
+});
+
+test("resets the daily loss calculation at the next UTC day", async () => {
+  await withEngine(async (engine) => {
+    await engine.processTrade(sourceTrade("buy", "new-day-buy-1"));
+    const lossExit = await engine.processTrade(sourceTrade("sell", "new-day-sell-1", {
+      quoteAmountRaw: "50",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "0",
+    }));
+    assert.equal(lossExit.executed, true);
+    const nextDayBuy = await engine.processTrade(sourceTrade("buy", "new-day-buy-2", {
+      observedAt: "2026-01-02T00:00:00.000Z",
+    }));
+    assert.equal(nextDayBuy.executed, true);
+  }, { maxDailyLossPercent: 5 });
 });
