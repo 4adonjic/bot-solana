@@ -18,17 +18,34 @@ async function readJsonLines(file) {
 
 function summarizePaperFills(fills) {
   const summaries = new Map();
+  const walletSummaries = new Map();
   for (const fill of fills) {
     if (!fill || typeof fill.quoteMint !== 'string' || !/^\d+$/.test(String(fill.feeQuoteRaw ?? ''))) continue;
+    const walletKey = typeof fill.wallet === 'string' && fill.wallet.length > 0
+      ? JSON.stringify([fill.wallet, fill.quoteMint]) : null;
+    let walletSummary = walletKey ? walletSummaries.get(walletKey) : null;
+    if (walletKey && !walletSummary) {
+      walletSummary = { wallet: fill.wallet, quoteMint: fill.quoteMint, realizedPnlRaw: '0', totalFeesRaw: '0', buys: 0, sells: 0, closedTrades: 0, wins: 0, losses: 0, slippageBpsTotal: 0, slippageSamples: 0 };
+      walletSummaries.set(walletKey, walletSummary);
+    }
     let summary = summaries.get(fill.quoteMint);
     if (!summary) {
       summary = { realizedPnlRaw: '0', totalFeesRaw: '0', closedTrades: 0, wins: 0, losses: 0, slippageBpsTotal: 0, slippageSamples: 0 };
       summaries.set(fill.quoteMint, summary);
     }
     summary.totalFeesRaw = (BigInt(summary.totalFeesRaw) + BigInt(fill.feeQuoteRaw)).toString();
+    if (walletSummary) {
+      walletSummary.totalFeesRaw = (BigInt(walletSummary.totalFeesRaw) + BigInt(fill.feeQuoteRaw)).toString();
+      if (fill.side === 'buy') walletSummary.buys += 1;
+      if (fill.side === 'sell') walletSummary.sells += 1;
+    }
     if (Number.isFinite(fill.slippageBps) && fill.slippageBps >= 0) {
       summary.slippageBpsTotal += fill.slippageBps;
       summary.slippageSamples += 1;
+      if (walletSummary) {
+        walletSummary.slippageBpsTotal += fill.slippageBps;
+        walletSummary.slippageSamples += 1;
+      }
     }
     if (fill.side === 'sell' && /^-?\d+$/.test(String(fill.realizedPnlRaw ?? ''))) {
       const pnl = BigInt(fill.realizedPnlRaw);
@@ -36,12 +53,27 @@ function summarizePaperFills(fills) {
       summary.closedTrades += 1;
       if (pnl > 0n) summary.wins += 1;
       else if (pnl < 0n) summary.losses += 1;
+      if (walletSummary) {
+        walletSummary.realizedPnlRaw = (BigInt(walletSummary.realizedPnlRaw) + pnl).toString();
+        walletSummary.closedTrades += 1;
+        if (pnl > 0n) walletSummary.wins += 1;
+        else if (pnl < 0n) walletSummary.losses += 1;
+      }
     }
   }
-  return Object.fromEntries([...summaries.entries()].map(([mint, summary]) => [mint, {
+  const byAsset = Object.fromEntries([...summaries.entries()].map(([mint, summary]) => [mint, {
     ...summary,
     averageSlippageBps: summary.slippageSamples ? summary.slippageBpsTotal / summary.slippageSamples : null,
   }]));
+  const byWallet = [...walletSummaries.values()].map(summary => ({
+    ...summary,
+    averageSlippageBps: summary.slippageSamples ? summary.slippageBpsTotal / summary.slippageSamples : null,
+  })).sort((a, b) => {
+    if (a.quoteMint !== b.quoteMint) return a.quoteMint.localeCompare(b.quoteMint);
+    const left = BigInt(a.realizedPnlRaw), right = BigInt(b.realizedPnlRaw);
+    return left === right ? a.wallet.localeCompare(b.wallet) : left > right ? -1 : 1;
+  });
+  return { byAsset, byWallet };
 }
 
 async function loadDashboardSnapshot(directory) {
@@ -59,6 +91,7 @@ async function loadDashboardSnapshot(directory) {
   const rankings = rankingData && rankingData.version === 1 && Array.isArray(rankingData.wallets) ? rankingData.wallets : [];
   const paper = paperData && paperData.version === 1 && paperData.balances && Array.isArray(paperData.positions) && Array.isArray(paperData.fills)
     ? paperData : null;
+  const paperPerformance = paper ? summarizePaperFills(paper.fills) : null;
   return {
     generatedAt: new Date().toISOString(), dataDirectory: directory,
     sources: { candidates: candidates.length > 0, rankings: rankings.length > 0, trades: trades.length > 0, watchlist: watchlist.length > 0, paper: paper !== null },
@@ -71,7 +104,7 @@ async function loadDashboardSnapshot(directory) {
     candidates: candidates.sort((a,b) => String(b.lastSeenAt || '').localeCompare(String(a.lastSeenAt || ''))).slice(0,100),
     watchlist: watchlist.sort((a,b) => Number(b.active)-Number(a.active) || Number(b.reliabilityScore || 0)-Number(a.reliabilityScore || 0)),
     trades: trades.slice(-100).reverse(),
-    paper: paper ? { balances: paper.balances, positions: paper.positions, performance: summarizePaperFills(paper.fills), fills: paper.fills.slice(-100).reverse() } : null,
+    paper: paper ? { balances: paper.balances, positions: paper.positions, performance: paperPerformance.byAsset, walletPerformance: paperPerformance.byWallet, fills: paper.fills.slice(-100).reverse() } : null,
   };
 }
 
