@@ -200,3 +200,50 @@ test("loads initial virtual balances only once and rejects corrupted state", asy
     await assert.rejects(restarted.init(), /Invalid JSON in paper trading state/);
   });
 });
+
+
+test("uses a fresh quote after the configured delay and fails closed when unavailable", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "solana-paper-quote-"));
+  const filePath = join(directory, "paper.json");
+  const quoteCalls: Array<[string, string, string]> = [];
+  try {
+    const engine = new PaperTradingEngine({
+      filePath,
+      quoteAssets: [asset],
+      copyDelayMs: 0,
+      minSlippageBps: 200,
+      maxSlippageBps: 500,
+      feeBps: 100,
+      quoteProvider: async (inputMint, outputMint, amountRaw) => {
+        quoteCalls.push([inputMint, outputMint, amountRaw]);
+        return { outAmountRaw: "2000" };
+      },
+    });
+    await engine.init();
+    const quoteModeTrade = sourceTrade("buy", "fresh-quote-buy");
+    delete quoteModeTrade.quoteAmountRaw;
+    delete quoteModeTrade.quoteSource;
+    delete quoteModeTrade.quoteAmountIsEstimate;
+    const result = await engine.processTrade(quoteModeTrade);
+    assert.equal(result.executed, true);
+    assert.deepEqual(quoteCalls, [[quoteMint, "TestTokenMint", "990"]]);
+    if (result.executed) {
+      const simulatedTokens = BigInt(result.fill.tokenAmountRaw);
+      assert.equal(simulatedTokens >= 1900n && simulatedTokens <= 1960n, true);
+      assert.equal(result.fill.slippageBps >= 200 && result.fill.slippageBps <= 500, true);
+    }
+
+    const unavailable = new PaperTradingEngine({
+      filePath: join(directory, "unavailable.json"),
+      quoteAssets: [asset],
+      copyDelayMs: 0,
+      quoteProvider: async () => null,
+    });
+    await unavailable.init();
+    const rejected = await unavailable.processTrade(sourceTrade("buy", "missing-fresh-quote"));
+    assert.deepEqual(rejected, { executed: false, reason: "fresh_jupiter_quote_unavailable" });
+    assert.equal(unavailable.snapshot().fills.length, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

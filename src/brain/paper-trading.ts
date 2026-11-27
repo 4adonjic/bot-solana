@@ -12,10 +12,16 @@ export interface PaperQuoteAsset {
   buySizeRaw: string;
 }
 
+export type PaperQuoteProvider = (inputMint: string, outputMint: string, amountRaw: string) => Promise<{ outAmountRaw: string } | null>;
+
 export interface PaperTradingOptions {
   filePath?: string;
   quoteAssets?: readonly PaperQuoteAsset[];
   slippageBps?: number;
+  minSlippageBps?: number;
+  maxSlippageBps?: number;
+  copyDelayMs?: number;
+  quoteProvider?: PaperQuoteProvider;
   feeBps?: number;
   maxFills?: number;
 }
@@ -69,6 +75,10 @@ export class PaperTradingEngine {
   private readonly filePath: string;
   private readonly assets: Map<string, PaperQuoteAsset>;
   private readonly slippageBps: number;
+  private readonly minSlippageBps: number;
+  private readonly maxSlippageBps: number;
+  private readonly copyDelayMs: number;
+  private readonly quoteProvider: PaperQuoteProvider | undefined;
   private readonly feeBps: number;
   private readonly maxFills: number;
   private state: PaperTradingSnapshot;
@@ -80,6 +90,10 @@ export class PaperTradingEngine {
     const assets = options.quoteAssets ?? DEFAULT_ASSETS;
     this.assets = new Map(assets.map((asset) => [asset.mint, asset]));
     this.slippageBps = options.slippageBps ?? 50;
+    this.minSlippageBps = options.minSlippageBps ?? this.slippageBps;
+    this.maxSlippageBps = options.maxSlippageBps ?? this.slippageBps;
+    this.copyDelayMs = options.copyDelayMs ?? (options.quoteProvider ? 3_000 : 0);
+    this.quoteProvider = options.quoteProvider;
     this.feeBps = options.feeBps ?? 10;
     this.maxFills = options.maxFills ?? 100_000;
 
@@ -100,6 +114,14 @@ export class PaperTradingEngine {
     }
     if (!Number.isInteger(this.slippageBps) || this.slippageBps < 0 || this.slippageBps >= 10_000) {
       throw new Error("slippageBps must be between 0 and 9999");
+    }
+    if (!Number.isInteger(this.minSlippageBps) || this.minSlippageBps < 0 ||
+        !Number.isInteger(this.maxSlippageBps) || this.maxSlippageBps < this.minSlippageBps ||
+        this.maxSlippageBps >= 10_000) {
+      throw new Error("slippage range must be valid and below 10000 bps");
+    }
+    if (!Number.isSafeInteger(this.copyDelayMs) || this.copyDelayMs < 0 || this.copyDelayMs > 60_000) {
+      throw new Error("copyDelayMs must be between 0 and 60000");
     }
     if (!Number.isInteger(this.feeBps) || this.feeBps < 0 || this.feeBps >= 10_000) {
       throw new Error("feeBps must be between 0 and 9999");
@@ -166,11 +188,13 @@ export class PaperTradingEngine {
     if (
       !trade.wallet || !trade.signature || !trade.mint ||
       !/^\d+$/.test(trade.tokenAmountRaw) || BigInt(trade.tokenAmountRaw) <= 0n ||
-      !trade.quoteAmountRaw || !/^\d+$/.test(trade.quoteAmountRaw) || BigInt(trade.quoteAmountRaw) <= 0n ||
       !trade.quoteMint || trade.quoteDecimals === undefined ||
-      trade.quoteSource !== "token_balance" || trade.quoteAmountIsEstimate !== false
+      (!this.quoteProvider && (
+        !trade.quoteAmountRaw || !/^\d+$/.test(trade.quoteAmountRaw) || BigInt(trade.quoteAmountRaw) <= 0n ||
+        trade.quoteSource !== "token_balance" || trade.quoteAmountIsEstimate !== false
+      ))
     ) {
-      return { executed: false, reason: "missing_or_estimated_exact_quote_amount" };
+      return { executed: false, reason: this.quoteProvider ? "invalid_trade_data" : "missing_or_estimated_exact_quote_amount" };
     }
 
     const asset = this.assets.get(trade.quoteMint);
@@ -190,8 +214,14 @@ export class PaperTradingEngine {
       position.wallet === trade.wallet && position.mint === trade.mint && position.quoteMint === trade.quoteMint,
     );
     const position = positionIndex >= 0 ? positions[positionIndex] : undefined;
+    if (this.copyDelayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, this.copyDelayMs));
+    }
+    const slippageBps = this.chooseSlippage(trade.signature);
     const sourceTokens = BigInt(trade.tokenAmountRaw);
-    const sourceQuote = BigInt(trade.quoteAmountRaw);
+    const sourceQuote = trade.quoteAmountRaw && /^\d+$/.test(trade.quoteAmountRaw)
+      ? BigInt(trade.quoteAmountRaw)
+      : 0n;
     const currentBalance = BigInt(balances[asset.mint] ?? "0");
     let tokenAmount: bigint;
     let quoteAmount: bigint;
@@ -203,7 +233,15 @@ export class PaperTradingEngine {
       if (budget <= 0n) return { executed: false, reason: "insufficient_virtual_balance" };
       fee = (budget * BigInt(this.feeBps)) / 10_000n;
       const marketSpend = budget - fee;
-      tokenAmount = (marketSpend * sourceTokens * BigInt(10_000 - this.slippageBps)) / (sourceQuote * 10_000n);
+      if (this.quoteProvider) {
+        const quote = await this.quoteProvider(asset.mint, trade.mint, marketSpend.toString());
+        if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
+          return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
+        }
+        tokenAmount = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
+      } else {
+        tokenAmount = (marketSpend * sourceTokens * BigInt(10_000 - slippageBps)) / (sourceQuote * 10_000n);
+      }
       if (tokenAmount <= 0n) return { executed: false, reason: "simulated_token_amount_rounds_to_zero" };
       quoteAmount = budget;
       balances[asset.mint] = (currentBalance - budget).toString();
@@ -237,7 +275,16 @@ export class PaperTradingEngine {
       tokenAmount = (paperPositionTokens * sourceTokens) / leaderBefore;
       if (tokenAmount <= 0n) return { executed: false, reason: "proportional_sell_rounds_to_zero" };
       if (tokenAmount > paperPositionTokens) return { executed: false, reason: "proportional_sell_exceeds_paper_position" };
-      const grossProceeds = (tokenAmount * sourceQuote * BigInt(10_000 - this.slippageBps)) / (sourceTokens * 10_000n);
+      let grossProceeds: bigint;
+      if (this.quoteProvider) {
+        const quote = await this.quoteProvider(trade.mint, asset.mint, tokenAmount.toString());
+        if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
+          return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
+        }
+        grossProceeds = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
+      } else {
+        grossProceeds = (tokenAmount * sourceQuote * BigInt(10_000 - slippageBps)) / (sourceTokens * 10_000n);
+      }
       fee = (grossProceeds * BigInt(this.feeBps)) / 10_000n;
       quoteAmount = grossProceeds - fee;
       if (quoteAmount <= 0n) return { executed: false, reason: "simulated_proceeds_round_to_zero" };
@@ -270,7 +317,7 @@ export class PaperTradingEngine {
       tokenAmountRaw: tokenAmount.toString(),
       quoteAmountRaw: quoteAmount.toString(),
       feeQuoteRaw: fee.toString(),
-      slippageBps: this.slippageBps,
+      slippageBps,
       observedAt: trade.observedAt,
     };
     const nextState: PaperTradingSnapshot = {
@@ -287,6 +334,15 @@ export class PaperTradingEngine {
       balanceRaw: balances[asset.mint] ?? "0",
       position: nextPosition,
     };
+  }
+
+  private chooseSlippage(signature: string): number {
+    if (this.minSlippageBps === this.maxSlippageBps) return this.minSlippageBps;
+    let hash = 0;
+    for (let index = 0; index < signature.length; index++) {
+      hash = (Math.imul(hash, 31) + signature.charCodeAt(index)) >>> 0;
+    }
+    return this.minSlippageBps + (hash % (this.maxSlippageBps - this.minSlippageBps + 1));
   }
 
   private async persist(snapshot: PaperTradingSnapshot): Promise<void> {

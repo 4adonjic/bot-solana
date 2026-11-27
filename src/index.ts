@@ -17,6 +17,7 @@ import { rankWallets } from "./brain/wallet-ranking.js";
 import { selectWalletsForPaperTrading, walletSelectionKey } from "./brain/wallet-selection.js";
 import { WalletSelectionStore } from "./brain/wallet-selection-store.js";
 import { PaperTradingEngine } from "./brain/paper-trading.js";
+import { JupiterQuoteProvider } from "./brain/jupiter-quote-provider.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, { commitment: "confirmed", fetch: rateLimitedRpcFetch });
@@ -104,7 +105,19 @@ async function main(): Promise<void> {
     await historyBackfill.init();
     const selectionStore = new WalletSelectionStore();
     await selectionStore.init();
-    const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
+    const jupiterQuotes = config.enablePaperTrading
+      ? new JupiterQuoteProvider({ ...(config.jupiterApiKey ? { apiKey: config.jupiterApiKey } : {}) })
+      : null;
+    const paperEngine = config.enablePaperTrading
+      ? new PaperTradingEngine({
+          quoteProvider: (inputMint, outputMint, amountRaw) =>
+            jupiterQuotes!.getQuote(inputMint, outputMint, amountRaw),
+          copyDelayMs: 3_000,
+          minSlippageBps: 200,
+          maxSlippageBps: 500,
+          feeBps: 10,
+        })
+      : null;
     let selectedWalletKeys = new Set<string>();
     if (paperEngine) {
       await paperEngine.init();
@@ -116,8 +129,10 @@ async function main(): Promise<void> {
           simulatedFills: paperSnapshot.fills.length,
           defaultStartingBalances: { SOL: "1", USDC: "100" },
           fixedBuySizes: { SOL: "0.05", USDC: "5" },
-          slippageBps: 50,
+          copyDelayMs: 3_000,
+          slippageRangeBps: [200, 500],
           feeBps: 10,
+          marketQuotes: "Jupiter Swap API v2 (read-only)",
           stateFile: "data/paper-trading.json",
         },
         "PAPER TRADING ACTIF : portefeuille fictif uniquement, aucune transaction blockchain ne sera envoyée",
