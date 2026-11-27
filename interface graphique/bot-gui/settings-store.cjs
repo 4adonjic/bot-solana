@@ -106,7 +106,10 @@ async function removeObservedWallet(envFile, wallet) {
   const current = await readSettings(envFile);
   if (!current.configured) throw new Error('Configuration RPC absente.');
   const wallets = current.targetWallets.split(/[\s,;]+/).filter(Boolean).filter(value => value !== wallet);
-  return saveSettings(envFile, { ...current, targetWallets: wallets.join('\\n'), enableDexDiscovery: current.enableDexDiscovery || wallets.length === 0 });
+  if (wallets.length === 0 && !current.enableDexDiscovery) {
+    throw new Error('Active la découverte DEX avant de retirer le dernier wallet surveillé.');
+  }
+  return saveSettings(envFile, { ...current, targetWallets: wallets.join('\n') });
 }
 
 module.exports = { parseEnv, isSolanaPublicKey, validateSettings, readSettings, saveSettings, addObservedWallet, removeObservedWallet };
