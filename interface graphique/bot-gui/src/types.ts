@@ -54,7 +54,7 @@ export interface Snapshot {
   rankings: WalletRanking[];
   watchlist: WatchEntry[];
   trades: Array<{ wallet: string; signature: string; mint: string; side: "buy" | "sell"; observedAt: string }>;
-  paper: null | { balances: Record<string, string>; positions: PaperPosition[]; performance: Record<string, { realizedPnlRaw: string; totalFeesRaw: string; closedTrades: number; wins: number; losses: number; slippageSamples: number; averageSlippageBps: number | null }>; fills: PaperFill[] };
+  paper: null | { balances: Record<string, string>; positions: PaperPosition[]; performance: Record<string, { realizedPnlRaw: string; totalFeesRaw: string; closedTrades: number; wins: number; losses: number; slippageBpsTotal: number; slippageSamples: number; averageSlippageBps: number | null }>; fills: PaperFill[] };
 }
 declare global {
   interface Window {
