@@ -129,20 +129,7 @@ export class WalletHistoryBackfill {
               ...(trade.dexProgramId ? { dexProgramId: trade.dexProgramId } : {}),
             });
             if (stored.inserted) tradesInserted++;
-            await this.options.candidates.record({
-              wallet: trade.wallet,
-              signature: trade.signature,
-              slot: info.slot,
-              mint: trade.mint,
-              side: trade.side,
-              tokenAmountRaw: trade.tokenAmountRaw,
-              quoteAmountRaw: trade.quoteAmountRaw,
-              quoteMint: trade.quoteMint,
-              quoteDecimals: trade.quoteDecimals,
-              quoteSource: "token_balance",
-              quoteAmountIsEstimate: false,
-              ...(trade.dexProgramId ? { dexProgramId: trade.dexProgramId } : {}),
-            });
+
           }
           progress.before = info.signature;
           progress.scanned++;
