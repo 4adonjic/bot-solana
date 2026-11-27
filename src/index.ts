@@ -18,6 +18,7 @@ import { selectWalletsForPaperTrading, walletSelectionKey } from "./brain/wallet
 import { WalletSelectionStore } from "./brain/wallet-selection-store.js";
 import { PaperTradingEngine } from "./brain/paper-trading.js";
 import { JupiterQuoteProvider } from "./brain/jupiter-quote-provider.js";
+import { auditDataDirectory } from "./brain/data-integrity.js";
 
 async function main(): Promise<void> {
   const connection = new Connection(config.rpcHttpUrl, { commitment: "confirmed", fetch: rateLimitedRpcFetch });
@@ -89,6 +90,16 @@ async function main(): Promise<void> {
   }
 
   if (config.enableDexDiscovery) {
+    const integrity = await auditDataDirectory("data");
+    logger.info(
+      { checkedFiles: integrity.checkedFiles, findingCount: integrity.findings.length },
+      "Contrôle de cohérence des données persistantes terminé (lecture seule)",
+    );
+    for (const finding of integrity.findings) {
+      const details = { file: finding.file, message: finding.message };
+      if (finding.severity === "error") logger.error(details, "Anomalie de données persistantes détectée");
+      else logger.warn(details, "Point de vigilance sur les données persistantes");
+    }
     const candidateStore = new WalletCandidateStore();
     await candidateStore.init();
     const tradeStore = new WalletTradeStore();
