@@ -33,7 +33,7 @@ export class JupiterQuoteProvider {
 
   async getQuote(inputMint: string, outputMint: string, amountRaw: string): Promise<JupiterQuote | null> {
     if (!inputMint || !outputMint || inputMint === outputMint ||
-        !/^\\d+$/.test(amountRaw) || BigInt(amountRaw) <= 0n) return null;
+        !/^\d+$/.test(amountRaw) || BigInt(amountRaw) <= 0n) return null;
 
     const run = this.queue.then(async () => {
       const now = Date.now();
@@ -64,7 +64,7 @@ export class JupiterQuoteProvider {
         if (typeof payload !== "object" || payload === null) return null;
         const item = payload as { outAmount?: unknown; priceImpactPct?: unknown };
         if (typeof item.outAmount !== "string" ||
-            !/^\\d+$/.test(item.outAmount) || BigInt(item.outAmount) <= 0n) return null;
+            !/^\d+$/.test(item.outAmount) || BigInt(item.outAmount) <= 0n) return null;
         return {
           outAmountRaw: item.outAmount,
           ...(typeof item.priceImpactPct === "string" ? { priceImpactPct: item.priceImpactPct } : {}),
