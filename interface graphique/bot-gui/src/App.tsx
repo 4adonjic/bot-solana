@@ -41,6 +41,62 @@ function DataTable({ headers, children }: { headers: string[]; children: ReactNo
   return <div className="table-scroll"><table><thead><tr>{headers.map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
 }
 
+type PaperFillList = NonNullable<Snapshot["paper"]>["fills"];
+
+function PnlHistoryChart({ fills, mint }: { fills: PaperFillList; mint: string }) {
+  const daily = new Map<string, number>();
+  for (const fill of [...fills].filter(f => f.quoteMint === mint && f.side === "sell" && /^-?\d+$/.test(String(f.realizedPnlRaw ?? ""))).sort((a,b) => a.observedAt.localeCompare(b.observedAt))) {
+    const timestamp = new Date(fill.observedAt);
+    if (!Number.isFinite(timestamp.getTime())) continue;
+    const day = timestamp.toLocaleDateString("fr-FR");
+    daily.set(day, (daily.get(day) ?? 0) + Number(fill.realizedPnlRaw) / 10 ** fill.quoteDecimals);
+  }
+  let cumulative = 0;
+  const points = [...daily.entries()].map(([label, pnl]) => ({ label, value: cumulative += pnl }));
+  if (!points.length) return <Empty>Pas encore de vente clôturée avec un P&L exploitable pour {asset(mint)}.</Empty>;
+  const values = points.map(p => p.value);
+  const min = Math.min(0, ...values), max = Math.max(0, ...values);
+  const span = max - min || 1;
+  const width = 720, height = 190, padX = 22, padY = 18;
+  const coords = points.map((p, i) => ({
+    x: points.length === 1 ? width / 2 : padX + i * (width - padX * 2) / (points.length - 1),
+    y: height - padY - (p.value - min) / span * (height - padY * 2),
+  }));
+  const path = coords.map((p, i) => (i ? "L" : "M") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const zeroY = height - padY - (0 - min) / span * (height - padY * 2);
+  return <div className="pnl-chart">
+    <div className="chart-summary"><strong className={points[points.length - 1].value >= 0 ? "source-ok" : "source-missing"}>{signedMoney(String(Math.round(points[points.length - 1].value * 10 ** decimals(mint))), decimals(mint))} {asset(mint)}</strong><span>{points.length} jour(s) avec clôture</span></div>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Évolution du P&L réalisé cumulé en ${asset(mint)}`} preserveAspectRatio="none">
+      <line x1={padX} x2={width-padX} y1={zeroY} y2={zeroY} className="chart-zero"/>
+      <path d={path} className="chart-line"/>
+      {coords.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r="3.5" className="chart-point"><title>{points[i].label} : {points[i].value.toLocaleString("fr-FR",{maximumFractionDigits:4})} {asset(mint)}</title></circle>)}
+    </svg>
+    <div className="chart-axis"><span>{points[0].label}</span><span>{points[points.length-1].label}</span></div>
+    <p className="muted">P&L réalisé cumulé, calculé à partir des ventes clôturées disponibles dans l’historique chargé. Ce graphique n’inclut pas les gains/pertes latents des positions ouvertes.</p>
+  </div>;
+}
+
+function ExposureBreakdown({ positions }: { positions: NonNullable<Snapshot["paper"]>["positions"] }) {
+  const groups = new Map<string, { mint: string; quoteMint: string; raw: bigint; count: number }>();
+  for (const position of positions) {
+    if (!/^\d+$/.test(position.costBasisRaw)) continue;
+    const key = position.quoteMint + ":" + position.mint;
+    const item = groups.get(key) ?? { mint: position.mint, quoteMint: position.quoteMint, raw: 0n, count: 0 };
+    item.raw += BigInt(position.costBasisRaw); item.count += 1; groups.set(key,item);
+  }
+  const rows = [...groups.values()].sort((a,b) => a.raw === b.raw ? 0 : a.raw > b.raw ? -1 : 1);
+  if (!rows.length) return <Empty>Aucune exposition ouverte à répartir.</Empty>;
+  const maxByQuote = new Map<string,bigint>();
+  for (const row of rows) if (row.raw > (maxByQuote.get(row.quoteMint) ?? 0n)) maxByQuote.set(row.quoteMint,row.raw);
+  return <div className="exposure-list">{rows.slice(0,20).map(row => {
+    const ratio = Number(row.raw * 10000n / (maxByQuote.get(row.quoteMint) || 1n)) / 100;
+    return <div className="exposure-item" key={row.quoteMint+row.mint}>
+      <div className="exposure-label"><b className="mono">{short(row.mint)}</b><span>{money(row.raw.toString(),decimals(row.quoteMint))} {asset(row.quoteMint)} · {row.count} position(s)</span></div>
+      <div className="exposure-track"><i style={{width:Math.min(100,ratio)+"%"}} /></div>
+    </div>;
+  })}</div>;
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>("overview");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -50,6 +106,9 @@ export default function App() {
   const [botStatus, setBotStatus] = useState<{ state: "stopped" | "starting" | "running" | "stopping"; pid: number | null; startedAt: string | null; exitCode: number | null; message: string }>({ state: "stopped", pid: null, startedAt: null, exitCode: null, message: "État inconnu" });
   const [botLogs, setBotLogs] = useState<Array<{ at: string; source: string; message: string }>>([]);
   const [botActionError, setBotActionError] = useState("");
+  const [fillSideFilter, setFillSideFilter] = useState("all");
+  const [fillAssetFilter, setFillAssetFilter] = useState("all");
+  const [fillSearch, setFillSearch] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -86,6 +145,15 @@ export default function App() {
   };
   const activeCount = snapshot?.counts.activeWallets ?? 0;
   const recentFills = useMemo(() => snapshot?.paper?.fills.slice(-8).reverse() ?? [], [snapshot]);
+  const filteredPaperFills = useMemo(() => {
+    const fills = snapshot?.paper?.fills ?? [];
+    const query = fillSearch.trim().toLowerCase();
+    return fills.filter(fill =>
+      (fillSideFilter === "all" || fill.side === fillSideFilter) &&
+      (fillAssetFilter === "all" || fill.quoteMint === fillAssetFilter) &&
+      (!query || fill.wallet.toLowerCase().includes(query) || fill.mint.toLowerCase().includes(query) || fill.sourceSignature.toLowerCase().includes(query))
+    );
+  }, [snapshot, fillSideFilter, fillAssetFilter, fillSearch]);
 
   return <div className="shell">
     <aside className="sidebar">
@@ -152,6 +220,10 @@ export default function App() {
         {page === "paper" && <div className="content">
           {!snapshot.paper ? <div className="alert">Aucun état Paper Trading trouvé. Active la simulation pour créer le portefeuille virtuel.</div> : <>
             <div className="metrics three"><Metric label="Fills enregistrés" value={snapshot.paper.fills.length} /><Metric label="Positions ouvertes" value={snapshot.paper.positions.length} /><Metric label="Trades observés" value={snapshot.counts.observedTrades} /></div>
+            <Panel title="Évolution du P&L réalisé"><p className="muted">Courbe du résultat net cumulé par actif de cotation. Les positions non clôturées ne sont pas valorisées.</p>
+              {Object.keys(snapshot.paper.performance).length ? Object.keys(snapshot.paper.performance).map(mint => <div className="chart-asset" key={mint}><h3>{asset(mint)}</h3><PnlHistoryChart fills={snapshot.paper!.fills} mint={mint} /></div>) : <Empty>Les graphiques apparaîtront après les premières ventes clôturées.</Empty>}
+            </Panel>
+            <Panel title="Répartition de l’exposition"><p className="muted">Coût de revient des positions encore ouvertes, regroupé par token et actif de cotation. Les barres sont comparées au plus gros poste de chaque actif.</p><ExposureBreakdown positions={snapshot.paper.positions} /></Panel>
             {Object.entries(snapshot.paper.performance).map(([mint, stats]) => <Panel key={mint} title={`Performance cumulée · ${asset(mint)}`}>
               <div className="metrics three">
                 <Metric label="P&L réalisé net" value={signedMoney(stats.realizedPnlRaw, decimals(mint)) + " " + asset(mint)} note={stats.closedTrades + " ventes clôturées"} />
@@ -176,9 +248,16 @@ export default function App() {
             <Panel title="Positions ouvertes"><DataTable headers={["WALLET", "TOKEN", "QUANTITÉ BRUTE", "COÛT DE REVIENT"]}>
               {snapshot.paper.positions.map((p, i) => <tr key={p.wallet + p.mint + i}><td className="mono">{short(p.wallet)}</td><td className="mono">{short(p.mint)}</td><td>{p.tokenAmountRaw}</td><td>{money(p.costBasisRaw, decimals(p.quoteMint))} {asset(p.quoteMint)}</td></tr>)}
             </DataTable>{!snapshot.paper.positions.length && <Empty>Aucune position ouverte.</Empty>}</Panel>
-            <Panel title="Historique des fills"><DataTable headers={["DATE", "SENS", "WALLET", "TOKEN", "MONTANT", "FRAIS"]}>
-              {[...snapshot.paper.fills].reverse().map((f, i) => <tr key={f.sourceSignature + i}><td>{date(f.observedAt)}</td><td><span className={"side " + f.side}>{f.side === "buy" ? "ACHAT" : "VENTE"}</span></td><td className="mono">{short(f.wallet)}</td><td className="mono">{short(f.mint)}</td><td>{money(f.quoteAmountRaw, f.quoteDecimals)} {asset(f.quoteMint)}</td><td>{money(f.feeQuoteRaw, f.quoteDecimals)} {asset(f.quoteMint)}</td></tr>)}
-            </DataTable>{!snapshot.paper.fills.length && <Empty>Aucune exécution simulée.</Empty>}</Panel>
+            <Panel title="Historique des fills" action={<span className="muted">{filteredPaperFills.length} / {snapshot.paper.fills.length} affichés</span>}>
+              <div className="fill-filters">
+                <input aria-label="Rechercher wallet ou token" placeholder="Rechercher wallet, token ou signature…" value={fillSearch} onChange={event => setFillSearch(event.target.value)} />
+                <select aria-label="Filtrer par sens" value={fillSideFilter} onChange={event => setFillSideFilter(event.target.value)}><option value="all">Tous les sens</option><option value="buy">Achats</option><option value="sell">Ventes</option></select>
+                <select aria-label="Filtrer par actif" value={fillAssetFilter} onChange={event => setFillAssetFilter(event.target.value)}><option value="all">Tous les actifs</option>{Object.keys(snapshot.paper!.performance).map(mint => <option key={mint} value={mint}>{asset(mint)}</option>)}</select>
+              </div>
+              <DataTable headers={["DATE", "SENS", "WALLET", "TOKEN", "MONTANT", "FRAIS"]}>
+                {filteredPaperFills.map((f, i) => <tr key={f.sourceSignature + i}><td>{date(f.observedAt)}</td><td><span className={"side " + f.side}>{f.side === "buy" ? "ACHAT" : "VENTE"}</span></td><td className="mono">{short(f.wallet)}</td><td className="mono">{short(f.mint)}</td><td>{money(f.quoteAmountRaw, f.quoteDecimals)} {asset(f.quoteMint)}</td><td>{money(f.feeQuoteRaw, f.quoteDecimals)} {asset(f.quoteMint)}</td></tr>)}
+              </DataTable>{!filteredPaperFills.length && <Empty>Aucun fill ne correspond aux filtres.</Empty>}
+            </Panel>
           </>}
           <p className="disclaimer">Les montants sont issus du portefeuille virtuel. Aucun ordre réel n’est envoyé sur Solana.</p>
         </div>}
