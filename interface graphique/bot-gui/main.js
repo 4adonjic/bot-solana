@@ -144,7 +144,7 @@ ipcMain.handle('wallets:remove-manual', async (_event, input) => {
   }
   if (input?.mode === 'paper') {
     const wallets = await removeManualWallet(manualPaperWalletFile, wallet);
-    return { mode: 'paper', wallets, restartRequired: true };
+    return { mode: 'paper', wallets, restartRequired: false };
   }
   throw new Error('Mode de wallet invalide.');
 }));
