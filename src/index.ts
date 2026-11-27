@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
 import { rateLimitedRpcFetch } from "./core/rpc-fetch.js";
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
           throw new Error('Format du fichier manual-paper-wallets.json invalide');
         }
         const wallets = parsed.wallets as string[];
-        for (const wallet of wallets) new (await import('@solana/web3.js')).PublicKey(wallet);
+        for (const wallet of wallets) new PublicKey(wallet);
         manualPaperWallets.clear();
         for (const wallet of wallets) manualPaperWallets.add(wallet);
       } catch (error) {
