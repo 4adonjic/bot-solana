@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadDashboardSnapshot } = require('./dashboard-data.cjs');
+const { loadDashboardSnapshot, auditDataDirectory } = require('./dashboard-data.cjs');
 const { readSettings, saveSettings, addObservedWallet, removeObservedWallet } = require('./settings-store.cjs');
 const { readManualWallets, addManualWallet, removeManualWallet } = require('./manual-wallet-store.cjs');
 
@@ -114,6 +114,7 @@ function createWindow() {
 }
 
 ipcMain.handle('dashboard:get-snapshot', async () => loadDashboardSnapshot(dataDirectory));
+ipcMain.handle('health:get-report', async () => auditDataDirectory(dataDirectory));
 ipcMain.handle('settings:get', async () => readSettings(backendEnvFile));
 ipcMain.handle('settings:save', async (_event, input) => ({
   settings: await saveSettings(backendEnvFile, input),

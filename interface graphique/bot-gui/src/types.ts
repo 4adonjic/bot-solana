@@ -66,6 +66,13 @@ export interface WalletRanking {
   maxDrawdownRaw: string;
   pnlIsGross: true;
 }
+export interface HealthReport {
+  generatedAt: string;
+  checkedFiles: number;
+  files: Array<{ name: string; status: 'ok' | 'warning' | 'error' | 'missing'; detail: string; findingCount?: number }>;
+  findings: Array<{ severity: 'warning' | 'error'; file: string; message: string }>;
+  summary: { errors: number; warnings: number; missing: number };
+}
 export interface Snapshot {
   generatedAt: string;
   dataDirectory: string;
@@ -105,6 +112,7 @@ declare global {
   interface Window {
     botDashboard?: {
       getSnapshot: () => Promise<Snapshot>;
+      getHealthReport: () => Promise<HealthReport>;
       getSettings: () => Promise<DesktopSettings>;
       saveSettings: (settings: Omit<DesktopSettings, 'configured'>) => Promise<{ settings: DesktopSettings; restartRequired: boolean; botRunning: boolean }>;
       getManualWallets: () => Promise<{ observed: string[]; paper: string[] }>;

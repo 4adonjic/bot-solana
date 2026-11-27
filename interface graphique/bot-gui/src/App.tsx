@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { Snapshot } from "./types";
+import type { HealthReport, Snapshot } from "./types";
 import SettingsPage from "./Settings";
 import ManualWallets from "./ManualWallets";
 
-type Page = "overview" | "wallets" | "paper" | "activity" | "settings";
+type Page = "overview" | "wallets" | "paper" | "activity" | "health" | "settings";
 const nav: Array<{ id: Page; label: string; icon: string }> = [
   { id: "overview", label: "Vue générale", icon: "◫" },
   { id: "wallets", label: "Wallets", icon: "◎" },
   { id: "paper", label: "Paper Trading", icon: "▤" },
   { id: "activity", label: "Activité", icon: "⌁" },
+  { id: "health", label: "Santé du bot", icon: "♥" },
   { id: "settings", label: "Paramètres", icon: "⚙" },
 ];
 const short = (value?: string) => value ? value.slice(0, 6) + "…" + value.slice(-5) : "—";
@@ -100,6 +101,7 @@ function ExposureBreakdown({ positions }: { positions: NonNullable<Snapshot["pap
 export default function App() {
   const [page, setPage] = useState<Page>("overview");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [health, setHealth] = useState<HealthReport | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [updated, setUpdated] = useState("");
@@ -114,6 +116,8 @@ export default function App() {
     setLoading(true);
     try {
       if (!window.botDashboard) throw new Error("Cette console doit être lancée avec l'application Electron.");
+      const report = await window.botDashboard.getHealthReport();
+      setHealth(report);
       const next = await window.botDashboard.getSnapshot();
       setSnapshot(next);
       setUpdated(new Date().toLocaleTimeString("fr-FR"));
@@ -166,7 +170,7 @@ export default function App() {
       <header className="topbar"><div><div className="eyebrow">CONSOLE / {nav.find(n => n.id === page)?.label.toUpperCase()}</div><h1>{nav.find(n => n.id === page)?.label}</h1></div>
         <div className="top-actions"><div className="connection"><span className={botStatus.state === "running" ? "status-dot" : "status-dot idle"} /> {botStatus.state === "running" ? "Bot en marche" : botStatus.state === "starting" ? "Démarrage…" : botStatus.state === "stopping" ? "Arrêt…" : "Bot arrêté"}</div>{botStatus.state === "running" || botStatus.state === "starting" ? <button className="bot-stop" onClick={() => void controlBot("stop")} disabled={botStatus.state !== "running"}>■ Arrêter</button> : <button className="bot-start" onClick={() => void controlBot("start")} disabled={botStatus.state === "stopping"}>▶ Lancer le bot</button>}<button className="refresh" onClick={() => void refresh()} disabled={loading}>{loading ? "Actualisation…" : "↻ Actualiser"}</button></div>
       </header>
-      {error && <div className="alert">Lecture impossible : {error}</div>}{botActionError && <div className="alert">{botActionError}</div>}
+      {error && page !== "health" && <div className="alert">Lecture impossible : {error}</div>}{botActionError && <div className="alert">{botActionError}</div>}
       {!snapshot && loading && <Empty>Chargement des données du bot…</Empty>}
       {snapshot && <>
         {page === "overview" && <div className="content">
@@ -266,6 +270,28 @@ export default function App() {
         </DataTable>{!snapshot.trades.length && <Empty>Aucun trade enregistré.</Empty>}</Panel></div>}
         {page === "settings" && <SettingsPage botRunning={botStatus.state !== "stopped"} />}
       </>}
+      {page === "health" && <div className="content">
+        <div className="welcome"><div><div className="eyebrow">DIAGNOSTIC LOCAL</div><h2>Santé des données</h2><p>Vérification en lecture seule des fichiers persistants. Aucun fichier n’est corrigé ou supprimé.</p></div>
+          <button className="refresh" onClick={() => void refresh()} disabled={loading}>{loading ? "Analyse…" : "↻ Relancer le contrôle"}</button>
+        </div>
+        {!health ? <Empty>{error || "Chargement du rapport de santé…"}</Empty> : <>
+          <div className="metrics">
+            <Metric label="Fichiers contrôlés" value={health.checkedFiles} note={health.files.length + " fichiers connus"} />
+            <Metric label="Erreurs" value={health.summary.errors} note="Anomalies à examiner" />
+            <Metric label="Avertissements" value={health.summary.warnings} note="Points de vigilance" />
+            <Metric label="Fichiers absents" value={health.summary.missing} note="Peuvent être normaux avant démarrage" />
+          </div>
+          <Panel title="État des fichiers" action={<span className="muted">Contrôle du {date(health.generatedAt)}</span>}>
+            <DataTable headers={["FICHIER", "ÉTAT", "DÉTAIL"]}>
+              {health.files.map(file => <tr key={file.name}><td className="mono">{file.name}</td><td><span className={"pill " + (file.status === "ok" ? "green" : file.status === "missing" ? "gray" : "warning-pill")}>{file.status === "ok" ? "Sain" : file.status === "missing" ? "Absent" : file.status === "warning" ? "À vérifier" : "Erreur"}</span></td><td>{file.detail}{file.findingCount ? " · " + file.findingCount + " anomalie(s)" : ""}</td></tr>)}
+            </DataTable>
+          </Panel>
+          <Panel title="Anomalies détectées" action={<span className="muted">{health.findings.length} élément(s)</span>}>
+            {health.findings.length ? <div className="health-findings">{health.findings.map((finding, index) => <div className="health-finding" key={finding.file + index}><span className={"pill " + (finding.severity === "error" ? "red-pill" : "warning-pill")}>{finding.severity === "error" ? "ERREUR" : "AVERTISSEMENT"}</span><div><b>{finding.file}</b><small>{finding.message}</small></div></div>)}</div> : <Empty>Aucune anomalie détectée dans les fichiers présents.</Empty>}
+          </Panel>
+          <p className="disclaimer">Ce diagnostic ne constitue pas une validation financière des performances. Il contrôle uniquement la cohérence structurelle des données locales.</p>
+        </>}
+      </div>}
       <footer><span>Solana Bot Console <b>0.3.0</b> · Contrôle local</span><span>Dernière actualisation : {updated || "—"}</span></footer>
     </main>
   </div>;
