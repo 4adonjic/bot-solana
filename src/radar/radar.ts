@@ -1,6 +1,7 @@
 import { Connection, Context, Logs, PublicKey } from "@solana/web3.js";
 import { config } from "../config/env.js";
 import { logger } from "../core/logger.js";
+import { rateLimitedRpcFetch } from "../core/rpc-fetch.js";
 
 export interface AccountChange {
   pubkey: string;
@@ -53,6 +54,7 @@ export class Radar {
     this.connection = new Connection(config.rpcHttpUrl, {
       commitment: this.commitment,
       wsEndpoint: wsRpcUrl,
+      fetch: rateLimitedRpcFetch,
     });
   }
 

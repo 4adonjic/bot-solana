@@ -1,6 +1,7 @@
 import { Connection, Context, Logs, PublicKey } from "@solana/web3.js";
 import { config } from "../config/env.js";
 import { logger } from "../core/logger.js";
+import { rateLimitedRpcFetch } from "../core/rpc-fetch.js";
 import { DEX_PROGRAM_IDS } from "../decoder/dex.js";
 
 export type OnDexTransaction = (signature: string, slot: number) => void | Promise<void>;
@@ -29,6 +30,7 @@ export class DexRadar {
     this.connection = new Connection(config.rpcHttpUrl, {
       commitment: this.commitment,
       wsEndpoint: config.rpcWsUrl,
+      fetch: rateLimitedRpcFetch,
     });
   }
 
