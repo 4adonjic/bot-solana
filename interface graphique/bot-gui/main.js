@@ -121,14 +121,14 @@ ipcMain.handle('settings:save', async (_event, input) => ({
   botRunning: botStatus.state !== 'stopped',
 }));
 ipcMain.handle('wallets:get-manual', async () => ({
-  observed: (await readSettings(backendEnvFile)).targetWallets.split(/[\\s,;]+/).filter(Boolean),
+  observed: (await readSettings(backendEnvFile)).targetWallets.split(/[\s,;]+/).filter(Boolean),
   paper: await readManualWallets(manualPaperWalletFile),
 }));
 ipcMain.handle('wallets:add-manual', async (_event, input) => {
   const wallet = String(input?.wallet || '').trim();
   if (input?.mode === 'observe') {
     const settings = await addObservedWallet(backendEnvFile, wallet);
-    return { mode: 'observe', wallets: settings.targetWallets.split(/[\\s,;]+/).filter(Boolean), restartRequired: true };
+    return { mode: 'observe', wallets: settings.targetWallets.split(/[\s,;]+/).filter(Boolean), restartRequired: true };
   }
   if (input?.mode === 'paper') {
     const wallets = await addManualWallet(manualPaperWalletFile, wallet);
@@ -140,7 +140,7 @@ ipcMain.handle('wallets:remove-manual', async (_event, input) => {
   const wallet = String(input?.wallet || '').trim();
   if (input?.mode === 'observe') {
     const settings = await removeObservedWallet(backendEnvFile, wallet);
-    return { mode: 'observe', wallets: settings.targetWallets.split(/[\\s,;]+/).filter(Boolean), restartRequired: true };
+    return { mode: 'observe', wallets: settings.targetWallets.split(/[\s,;]+/).filter(Boolean), restartRequired: true };
   }
   if (input?.mode === 'paper') {
     const wallets = await removeManualWallet(manualPaperWalletFile, wallet);
