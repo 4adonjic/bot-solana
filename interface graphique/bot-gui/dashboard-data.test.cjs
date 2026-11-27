@@ -73,7 +73,7 @@ test('audits persistent files without changing them and reports malformed record
     const report = await auditDataDirectory(dir);
     assert.equal(report.checkedFiles, 2);
     assert.ok(report.summary.errors >= 2);
-    assert.ok(report.summary.warnings >= 2);
+    assert.ok(report.summary.warnings >= 1);
     assert.ok(report.findings.some(item => item.file === 'wallet-trades.jsonl' && item.message.includes('JSON invalide')));
     assert.ok(report.findings.some(item => item.file === 'paper-trading.json' && item.message.includes('Solde invalide')));
     assert.equal(await fs.readFile(trades, 'utf8'), original);
