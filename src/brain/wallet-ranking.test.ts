@@ -58,6 +58,46 @@ test("ranks only wallets meeting the minimum matched sells and active days", () 
   assert.equal(fresh.status, "insufficient_sample");
 });
 
+test("calculates rolling copyability metrics from reliable FIFO closed trades", () => {
+  const trades: PerformanceTrade[] = [
+    makeTrade("WalletCopyable", "MintA", "buy", "100", "b1", "2026-11-20T10:00:00.000Z"),
+    makeTrade("WalletCopyable", "MintA", "sell", "200", "s1", "2026-11-20T10:01:00.000Z"),
+    makeTrade("WalletCopyable", "MintA", "buy", "100", "b2", "2026-11-21T10:00:00.000Z"),
+    makeTrade("WalletCopyable", "MintA", "sell", "50", "s2", "2026-11-21T10:02:00.000Z"),
+    makeTrade("WalletCopyable", "MintA", "buy", "100", "b3", "2026-11-22T10:00:00.000Z"),
+    makeTrade("WalletCopyable", "MintA", "sell", "120", "s3", "2026-11-22T10:05:00.000Z"),
+  ];
+  const [ranking] = rankWallets(calculateWalletPerformance(trades), {
+    minMatchedSells: 1,
+    minActiveDays: 1,
+    now: new Date("2026-11-27T12:00:00.000Z"),
+  });
+
+  assert.ok(ranking);
+  assert.equal(ranking.closedTradeCount14d, 3);
+  assert.equal(ranking.realizedPnl14dRaw, "70");
+  assert.equal(ranking.medianTradePnlRaw, "20");
+  assert.equal(ranking.medianHoldingSeconds, 120);
+  assert.equal(ranking.maxProfitConcentrationPercent, 83.33);
+  assert.equal(ranking.maxDrawdownRaw, "50");
+});
+
+test("excludes estimated timestamps from rolling trade count and holding duration", () => {
+  const trades: PerformanceTrade[] = [
+    makeTrade("WalletEstimated", "MintA", "buy", "100", "b1", "2026-11-20T10:00:00.000Z"),
+    { ...makeTrade("WalletEstimated", "MintA", "sell", "150", "s1", "2026-11-20T10:01:00.000Z"), timestampIsEstimated: true },
+  ];
+  const [ranking] = rankWallets(calculateWalletPerformance(trades), {
+    minMatchedSells: 1,
+    minActiveDays: 1,
+    now: new Date("2026-11-27T12:00:00.000Z"),
+  });
+
+  assert.ok(ranking);
+  assert.equal(ranking.closedTradeCount14d, 0);
+  assert.equal(ranking.medianHoldingSeconds, null);
+});
+
 test("keeps rankings separate for different quote assets", () => {
   const performances = calculateWalletPerformance([
     makeTrade("WalletA", "MintA", "buy", "100", "a-buy", "2026-01-01T00:00:00.000Z", wsol),
