@@ -28,7 +28,7 @@ export default function SettingsPage({ botRunning }: { botRunning: boolean }) {
     return () => { active = false; };
   }, []);
 
-  const update = <K extends keyof DesktopSettings>(key: K, value: DesktopSettings[K]) => {
+  const update = <K extends keyof DesktopSettings,>(key: K, value: DesktopSettings[K]) => {
     setSettings(current => ({ ...current, [key]: value }));
     setNotice("");
     setError("");
