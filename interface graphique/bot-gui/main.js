@@ -147,7 +147,7 @@ ipcMain.handle('wallets:remove-manual', async (_event, input) => {
     return { mode: 'paper', wallets, restartRequired: false };
   }
   throw new Error('Mode de wallet invalide.');
-}));
+});
 ipcMain.handle('bot:get-status', () => botStatus);
 ipcMain.handle('bot:get-logs', () => botLogs);
 ipcMain.handle('bot:start', () => startBot());
