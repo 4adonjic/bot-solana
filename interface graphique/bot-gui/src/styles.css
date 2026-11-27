@@ -222,3 +222,14 @@ footer{
 .panel>input[aria-label="Filtrer les diagnostics"]{display:block;width:calc(100% - 36px);margin:0 18px 14px;border:1px solid #34435e;border-radius:8px;background:#0b1424;color:#e5ebf7;padding:10px 11px;font:10px inherit}
 .panel>input[aria-label="Filtrer les diagnostics"]:focus{outline:none;border-color:#9384ff;box-shadow:0 0 0 3px rgba(147,132,255,.13)}
 @media(max-width:700px){.wallet-diagnostics{grid-template-columns:1fr;padding:4px 13px 14px}.panel>input[aria-label="Filtrer les diagnostics"]{width:calc(100% - 26px);margin:0 13px 12px}.wallet-diagnostic-stats{gap:6px}}
+
+
+/* Data health page */
+.health-findings{display:grid;gap:0}
+.health-finding{display:flex;align-items:flex-start;gap:12px;padding:14px 19px;border-top:1px solid rgba(132,151,185,.1)}
+.health-finding>div{display:grid;gap:5px;min-width:0}
+.health-finding b{font-size:10px;color:#dbe4f4}
+.health-finding small{font-size:9px;color:#9aa8be;line-height:1.55;overflow-wrap:anywhere}
+.warning-pill{background:rgba(153,105,38,.18);color:#e8c17d;border:1px solid rgba(214,165,83,.2)}
+.red-pill{background:rgba(154,55,72,.2);color:#ff9eaa;border:1px solid rgba(230,102,121,.2)}
+@media(max-width:700px){.health-finding{padding:12px 13px;gap:8px;flex-direction:column}}
