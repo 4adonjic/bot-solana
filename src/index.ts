@@ -138,23 +138,51 @@ async function main(): Promise<void> {
     await refreshWalletRanking();
     let newTradesSinceRanking = 0;
     const rankingRefreshInterval = 100;
-    // Bound DEX transaction RPC calls to avoid flooding free-tier providers.
+    // Keep discovery below the shared Helius HTTP RPC budget. DEX logs can
+    // arrive in large bursts, so sample before enqueueing any transaction fetch.
+    const DEX_DECODE_MIN_INTERVAL_MS = 250; // at most 4 transaction fetches/second
     const decodeCandidatesLimited = createConcurrencyLimiter(
       (signature: string) => defaultDecoder.decodeWalletCandidates(signature),
-      { maxConcurrent: 2, maxQueued: 50 },
+      { maxConcurrent: 2, maxQueued: 20 },
     );
+    let nextDexDecodeAt = 0;
+    const dexStats = {
+      eventsReceived: 0,
+      sampledOut: 0,
+      queueFull: 0,
+      transactionsDecoded: 0,
+      candidateTrades: 0,
+    };
+    const dexStatsInterval = setInterval(() => {
+      const snapshot = { ...dexStats };
+      dexStats.eventsReceived = 0;
+      dexStats.sampledOut = 0;
+      dexStats.queueFull = 0;
+      dexStats.transactionsDecoded = 0;
+      dexStats.candidateTrades = 0;
+      logger.info(snapshot, "Statistiques du flux DEX (intervalle de 15 secondes)");
+    }, 15_000);
+    dexStatsInterval.unref();
 
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
+      dexStats.eventsReceived += 1;
+      const now = Date.now();
+      if (now < nextDexDecodeAt) {
+        dexStats.sampledOut += 1;
+        return;
+      }
+      nextDexDecodeAt = now + DEX_DECODE_MIN_INTERVAL_MS;
+
       let candidates;
       try {
         candidates = await decodeCandidatesLimited(signature);
-      } catch (error) {
-        logger.warn(
-          { signature, error },
-          "File de décodage DEX saturée : transaction ignorée pour protéger le RPC",
-        );
+      } catch {
+        // Queue pressure is reported by the periodic aggregate below, not per event.
+        dexStats.queueFull += 1;
         return;
       }
+      dexStats.transactionsDecoded += 1;
+      dexStats.candidateTrades += candidates.length;
       if (candidates.length === 0) return;
 
       for (const candidate of candidates) {
