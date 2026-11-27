@@ -56,8 +56,28 @@ export interface Snapshot {
   trades: Array<{ wallet: string; signature: string; mint: string; side: "buy" | "sell"; observedAt: string }>;
   paper: null | { balances: Record<string, string>; positions: PaperPosition[]; performance: Record<string, { realizedPnlRaw: string; totalFeesRaw: string; closedTrades: number; wins: number; losses: number; slippageBpsTotal: number; slippageSamples: number; averageSlippageBps: number | null }>; walletPerformance: Array<{ wallet: string; quoteMint: string; realizedPnlRaw: string; totalFeesRaw: string; buys: number; sells: number; closedTrades: number; wins: number; losses: number; slippageBpsTotal: number; slippageSamples: number; averageSlippageBps: number | null }>; fills: PaperFill[] };
 }
+export interface BotStatus {
+  state: "stopped" | "starting" | "running" | "stopping";
+  pid: number | null;
+  startedAt: string | null;
+  exitCode: number | null;
+  message: string;
+}
+export interface BotLogEntry {
+  at: string;
+  source: string;
+  message: string;
+}
 declare global {
   interface Window {
-    botDashboard?: { getSnapshot: () => Promise<Snapshot> };
+    botDashboard?: {
+      getSnapshot: () => Promise<Snapshot>;
+      getBotStatus: () => Promise<BotStatus>;
+      getBotLogs: () => Promise<BotLogEntry[]>;
+      startBot: () => Promise<BotStatus>;
+      stopBot: () => Promise<BotStatus>;
+      onBotStatus: (callback: (status: BotStatus) => void) => () => void;
+      onBotLog: (callback: (entry: BotLogEntry) => void) => () => void;
+    };
   }
 }
