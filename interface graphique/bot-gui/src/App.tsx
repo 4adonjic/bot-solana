@@ -45,6 +45,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [updated, setUpdated] = useState("");
+  const [botStatus, setBotStatus] = useState<{ state: "stopped" | "starting" | "running" | "stopping"; pid: number | null; startedAt: string | null; exitCode: number | null; message: string }>({ state: "stopped", pid: null, startedAt: null, exitCode: null, message: "État inconnu" });
+  const [botLogs, setBotLogs] = useState<Array<{ at: string; source: string; message: string }>>([]);
+  const [botActionError, setBotActionError] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -60,6 +63,25 @@ export default function App() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!window.botDashboard) return;
+    void window.botDashboard.getBotStatus().then(setBotStatus).catch(() => undefined);
+    void window.botDashboard.getBotLogs().then(setBotLogs).catch(() => undefined);
+    const offStatus = window.botDashboard.onBotStatus(setBotStatus);
+    const offLog = window.botDashboard.onBotLog(entry => setBotLogs(current => [...current.slice(-299), entry]));
+    return () => { offStatus(); offLog(); };
+  }, []);
+
+  const controlBot = async (action: "start" | "stop") => {
+    setBotActionError("");
+    try {
+      const status = action === "start" ? await window.botDashboard!.startBot() : await window.botDashboard!.stopBot();
+      setBotStatus(status);
+    } catch (e) {
+      setBotActionError(e instanceof Error ? e.message : "Impossible de piloter le bot.");
+    }
+  };
   const activeCount = snapshot?.counts.activeWallets ?? 0;
   const recentFills = useMemo(() => snapshot?.paper?.fills.slice(-8).reverse() ?? [], [snapshot]);
 
@@ -72,9 +94,9 @@ export default function App() {
     </aside>
     <main className="main">
       <header className="topbar"><div><div className="eyebrow">CONSOLE / {nav.find(n => n.id === page)?.label.toUpperCase()}</div><h1>{nav.find(n => n.id === page)?.label}</h1></div>
-        <div className="top-actions"><div className="connection"><span className="status-dot" /> Données locales</div><button className="refresh" onClick={() => void refresh()} disabled={loading}>{loading ? "Actualisation…" : "↻ Actualiser"}</button></div>
+        <div className="top-actions"><div className="connection"><span className={botStatus.state === "running" ? "status-dot" : "status-dot idle"} /> {botStatus.state === "running" ? "Bot en marche" : botStatus.state === "starting" ? "Démarrage…" : botStatus.state === "stopping" ? "Arrêt…" : "Bot arrêté"}</div>{botStatus.state === "running" || botStatus.state === "starting" ? <button className="bot-stop" onClick={() => void controlBot("stop")} disabled={botStatus.state !== "running"}>■ Arrêter</button> : <button className="bot-start" onClick={() => void controlBot("start")} disabled={botStatus.state === "stopping"}>▶ Lancer le bot</button>}<button className="refresh" onClick={() => void refresh()} disabled={loading}>{loading ? "Actualisation…" : "↻ Actualiser"}</button></div>
       </header>
-      {error && <div className="alert">Lecture impossible : {error}</div>}
+      {error && <div className="alert">Lecture impossible : {error}</div>}{botActionError && <div className="alert">{botActionError}</div>}
       {!snapshot && loading && <Empty>Chargement des données du bot…</Empty>}
       {snapshot && <>
         {page === "overview" && <div className="content">
@@ -85,6 +107,7 @@ export default function App() {
             <Metric label="Fills simulés" value={snapshot.counts.paperFills} note="Exécutions virtuelles" />
             <Metric label="Positions ouvertes" value={snapshot.counts.openPositions} note="Portefeuille papier" />
           </div>
+          <Panel title="Moteur du bot"><div className="engine-status"><div><span className={botStatus.state === "running" ? "status-dot" : "status-dot idle"} /> <b>{botStatus.message}</b><small>{botStatus.pid ? "Processus " + botStatus.pid : "Aucun processus actif"}</small></div><span className="pill gray">Paper Trading uniquement</span></div>{botLogs.length ? <div className="engine-logs">{botLogs.slice(-8).reverse().map((entry, i) => <div key={entry.at + i}><time>{new Date(entry.at).toLocaleTimeString("fr-FR")}</time><span className={entry.source === "error" ? "log-error" : ""}>{entry.message}</span></div>)}</div> : <Empty>Les journaux du moteur apparaîtront ici au démarrage.</Empty>}</Panel>
           <Panel title="Wallets sélectionnés" action={<button className="text-button" onClick={() => setPage("wallets")}>Voir les wallets →</button>}>
             {snapshot.watchlist.length ? <DataTable headers={["WALLET", "QUOTE", "FIABILITÉ", "TENDANCE", "ÉTAT"]}>
               {snapshot.watchlist.slice(0, 6).map((w, i) => <tr key={w.wallet + w.quoteMint}><td><span className="rank">{String(i + 1).padStart(2, "0")}</span><b className="mono">{short(w.wallet)}</b></td><td>{asset(w.quoteMint)}</td><td><span className="score">{w.reliabilityScore}<small>/100</small></span></td><td><span className={"trend " + w.trend}>{w.trend === "improving" ? "↗ En hausse" : w.trend === "declining" ? "↘ En baisse" : "→ Stable"}</span></td><td><span className={w.active ? "pill green" : "pill gray"}>{w.active ? "Actif" : "En pause"}</span></td></tr>)}
@@ -165,7 +188,7 @@ export default function App() {
           <div className="security-note"><b>Protection des fonds</b><p>Le trading réel n’est pas implémenté. L’interface ne détient aucune clé privée et ne peut pas signer ou envoyer de transaction.</p></div>
         </div>}
       </>}
-      <footer><span>Solana Bot Console <b>0.2.0</b> · Lecture seule</span><span>Dernière actualisation : {updated || "—"}</span></footer>
+      <footer><span>Solana Bot Console <b>0.3.0</b> · Contrôle local</span><span>Dernière actualisation : {updated || "—"}</span></footer>
     </main>
   </div>;
 }
