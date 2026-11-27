@@ -21,7 +21,7 @@ const asset = (mint: string) => mint === "So111111111111111111111111111111111111
   mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" ? "USDC" : short(mint);
 const decimals = (mint: string) => mint === "So11111111111111111111111111111111111111112" ? 9 : 6;
 const signedMoney = (raw: string, places: number) => {
-  if (!/^-?\\d+$/.test(raw)) return "—";
+  if (!/^-?\d+$/.test(raw)) return "—";
   const value = Number(raw) / 10 ** places;
   return (value > 0 ? "+" : "") + value.toLocaleString("fr-FR", { maximumFractionDigits: 4 });
 };
