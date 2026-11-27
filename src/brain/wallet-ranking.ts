@@ -127,15 +127,15 @@ export function rankWallets(
       quoteMint: group.quoteMint,
       quoteDecimals: group.quoteDecimals,
       rank: null as number | null,
-      reliabilityScore: eligible
-        ? Math.round((
-            (Math.min(group.matchedSellCount / 30, 1) * 15) +
-            (winRatePercent * 0.25) +
-            (positiveDayRatePercent * 0.25) +
-            ((profitFactor === "∞" ? 100 : profitFactor === null ? 0 : Math.min(Number(profitFactor) / 3, 1) * 100) * 0.20) +
-            ((group.realizedPnl > 0n ? 100 : group.realizedPnl === 0n ? 50 : 0) * 0.15)
-          ) * 100) / 100
-        : null,
+      // Provisional score is also calculated before eligibility. The selection
+      // gate remains unchanged and still requires a complete minimum sample.
+      reliabilityScore: Math.round((
+        (Math.min(group.matchedSellCount / 30, 1) * 15) +
+        (winRatePercent * 0.25) +
+        (positiveDayRatePercent * 0.25) +
+        ((profitFactor === "∞" ? 100 : profitFactor === null ? 0 : Math.min(Number(profitFactor) / 3, 1) * 100) * 0.20) +
+        ((group.realizedPnl > 0n ? 100 : group.realizedPnl === 0n ? 50 : 0) * 0.15)
+      ) * 100) / 100,
       eligible,
       status,
       matchedSellCount: group.matchedSellCount,
