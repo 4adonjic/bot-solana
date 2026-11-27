@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseTokenBalanceChanges, parseWalletTradeChanges } from "./balance-parser.js";
+import { TransactionDecoder } from "./decoder.js";
 import type { ParsedTransaction, TokenBalance } from "./types.js";
 
 const wallet = "wallet-A";
@@ -188,4 +189,27 @@ test("strict wallet discovery rejects quote movements in the wrong direction", (
     [balance(wsolMint, "750000000", 9), balance(tokenMint, "1000000")],
   ), { requireQuoteEvidence: true });
   assert.equal(trades.length, 0);
+});
+
+
+test("requests support for versioned Solana transaction version 1", async () => {
+  const requestOptions: Array<{ maxSupportedTransactionVersion?: number }> = [];
+  const connection = {
+    getTransaction: async (
+      _signature: string,
+      options: { maxSupportedTransactionVersion?: number },
+    ) => {
+      requestOptions.push(options);
+      return null;
+    },
+  };
+  const decoder = new TransactionDecoder({ connection: connection as never, targetWallets: [] });
+
+  await decoder.decode("test-signature");
+  await decoder.decodeWalletCandidates("test-signature");
+
+  assert.deepEqual(
+    requestOptions.map((options) => options.maxSupportedTransactionVersion),
+    [1, 1],
+  );
 });
