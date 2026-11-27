@@ -37,10 +37,34 @@ export interface PaperFill {
   realizedPnlRaw?: string;
 }
 export interface WalletRanking {
-  wallet: string; quoteMint: string; rank: number | null; reliabilityScore: number | null;
-  eligible: boolean; status: "insufficient_sample" | "positive_history" | "negative_history" | "breakeven";
-  matchedSellCount: number; activeDays: number; winRatePercent: number;
-  realizedPnlRaw: string; profitFactor: string | null;
+  wallet: string;
+  quoteMint: string;
+  quoteDecimals: number;
+  rank: number | null;
+  reliabilityScore: number | null;
+  eligible: boolean;
+  status: "insufficient_sample" | "positive_history" | "negative_history" | "breakeven";
+  matchedSellCount: number;
+  profitableSellCount: number;
+  losingSellCount: number;
+  winRatePercent: number;
+  realizedPnlRaw: string;
+  grossProfitRaw: string;
+  grossLossRaw: string;
+  profitFactor: string | null;
+  matchedMintCount: number;
+  activeDays: number;
+  profitableDays: number;
+  losingDays: number;
+  positiveDayRatePercent: number;
+  openPositionCount: number;
+  closedTradeCount14d: number;
+  realizedPnl14dRaw: string;
+  medianTradePnlRaw: string | null;
+  medianHoldingSeconds: number | null;
+  maxProfitConcentrationPercent: number;
+  maxDrawdownRaw: string;
+  pnlIsGross: true;
 }
 export interface Snapshot {
   generatedAt: string;
