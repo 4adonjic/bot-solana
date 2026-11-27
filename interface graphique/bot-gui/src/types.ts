@@ -56,6 +56,15 @@ export interface Snapshot {
   trades: Array<{ wallet: string; signature: string; mint: string; side: "buy" | "sell"; observedAt: string }>;
   paper: null | { balances: Record<string, string>; positions: PaperPosition[]; performance: Record<string, { realizedPnlRaw: string; totalFeesRaw: string; closedTrades: number; wins: number; losses: number; slippageBpsTotal: number; slippageSamples: number; averageSlippageBps: number | null }>; walletPerformance: Array<{ wallet: string; quoteMint: string; realizedPnlRaw: string; totalFeesRaw: string; buys: number; sells: number; closedTrades: number; wins: number; losses: number; slippageBpsTotal: number; slippageSamples: number; averageSlippageBps: number | null }>; fills: PaperFill[] };
 }
+export interface DesktopSettings {
+  rpcHttpUrl: string;
+  rpcWsUrl: string;
+  logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+  targetWallets: string;
+  enableDexDiscovery: boolean;
+  enablePaperTrading: boolean;
+  configured: boolean;
+}
 export interface BotStatus {
   state: "stopped" | "starting" | "running" | "stopping";
   pid: number | null;
@@ -72,6 +81,8 @@ declare global {
   interface Window {
     botDashboard?: {
       getSnapshot: () => Promise<Snapshot>;
+      getSettings: () => Promise<DesktopSettings>;
+      saveSettings: (settings: Omit<DesktopSettings, 'configured'>) => Promise<{ settings: DesktopSettings; restartRequired: boolean; botRunning: boolean }>;
       getBotStatus: () => Promise<BotStatus>;
       getBotLogs: () => Promise<BotLogEntry[]>;
       startBot: () => Promise<BotStatus>;

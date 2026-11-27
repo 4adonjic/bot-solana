@@ -3,6 +3,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadDashboardSnapshot } = require('./dashboard-data.cjs');
+const { readSettings, saveSettings } = require('./settings-store.cjs');
 
 const packagedBackendRoot = path.join(process.resourcesPath, 'backend');
 const projectRoot = process.env.BOT_PROJECT_ROOT || (app.isPackaged
@@ -55,7 +56,7 @@ function startBot() {
     cwd: backendWorkingDirectory,
     windowsHide: true,
     env: {
-      ...process.env,
+      ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !['RPC_HTTP_URL', 'RPC_WS_URL', 'LOG_LEVEL', 'TARGET_WALLETS', 'ENABLE_DEX_DISCOVERY', 'ENABLE_PAPER_TRADING', 'JUPITER_API_KEY'].includes(key))),
       ELECTRON_RUN_AS_NODE: '1',
       DOTENV_CONFIG_PATH: backendEnvFile,
     },
@@ -111,6 +112,12 @@ function createWindow() {
 }
 
 ipcMain.handle('dashboard:get-snapshot', async () => loadDashboardSnapshot(dataDirectory));
+ipcMain.handle('settings:get', async () => readSettings(backendEnvFile));
+ipcMain.handle('settings:save', async (_event, input) => ({
+  settings: await saveSettings(backendEnvFile, input),
+  restartRequired: true,
+  botRunning: botStatus.state !== 'stopped',
+}));
 ipcMain.handle('bot:get-status', () => botStatus);
 ipcMain.handle('bot:get-logs', () => botLogs);
 ipcMain.handle('bot:start', () => startBot());
