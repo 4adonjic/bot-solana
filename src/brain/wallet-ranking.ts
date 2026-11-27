@@ -183,6 +183,11 @@ export function rankWallets(
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
     const realizedPnl14d = recentClosedTrades.reduce((sum, trade) => sum + trade.pnl, 0n);
+    const drawdownToGrossProfitPercent = group.grossProfit > 0n
+      ? Number((maxDrawdown * 10_000n) / group.grossProfit) / 100
+      : 100;
+    const drawdownScore = Math.max(0, 100 - Math.min(drawdownToGrossProfitPercent, 100));
+    const medianPnlScore = medianPnl === null ? 0 : medianPnl > 0n ? 100 : medianPnl === 0n ? 50 : 0;
 
     return {
       wallet: group.wallet,
@@ -192,11 +197,12 @@ export function rankWallets(
       // Provisional score is also calculated before eligibility. The selection
       // gate remains unchanged and still requires a complete minimum sample.
       reliabilityScore: Math.round((
-        (Math.min(group.matchedSellCount / 30, 1) * 15) +
-        (winRatePercent * 0.25) +
-        (positiveDayRatePercent * 0.25) +
+        (Math.min(group.matchedSellCount / 30, 1) * 10) +
+        (winRatePercent * 0.10) +
+        (positiveDayRatePercent * 0.20) +
         ((profitFactor === "∞" ? 100 : profitFactor === null ? 0 : Math.min(Number(profitFactor) / 3, 1) * 100) * 0.20) +
-        ((group.realizedPnl > 0n ? 100 : group.realizedPnl === 0n ? 50 : 0) * 0.15)
+        (medianPnlScore * 0.20) +
+        (drawdownScore * 0.20)
       ) * 100) / 100,
       eligible,
       status,
