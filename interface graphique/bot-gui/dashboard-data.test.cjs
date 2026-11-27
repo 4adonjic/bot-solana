@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { readJsonLines, loadDashboardSnapshot } = require('./dashboard-data.cjs');
+const { readJsonLines, loadDashboardSnapshot, auditDataDirectory } = require('./dashboard-data.cjs');
 
 test('loads the real persistent file formats used by the bot stores', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'bot-gui-'));
@@ -51,5 +51,43 @@ test('rejects malformed JSONL instead of silently hiding corrupted history', asy
     const file = path.join(dir, 'bad.jsonl');
     await fs.writeFile(file, '{not json}\n');
     await assert.rejects(readJsonLines(file), /JSON invalide/);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+
+test('audits persistent files without changing them and reports malformed records', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'bot-gui-health-'));
+  try {
+    const trades = path.join(dir, 'wallet-trades.jsonl');
+    const original = JSON.stringify({
+      wallet: 'walletA', signature: 'sigA', mint: 'mintA', side: 'buy',
+      tokenAmountRaw: '100', tokenDecimals: 6, slot: 1,
+      observedAt: '58876-01-01T00:00:00.000Z',
+    }) + '\\n{bad json}\\n';
+    await fs.writeFile(trades, original);
+    await fs.writeFile(path.join(dir, 'paper-trading.json'), JSON.stringify({
+      version: 1, balances: { SOL: '-5' },
+      positions: [{ wallet: 'walletA', mint: 'mintA', quoteMint: 'SOL', tokenAmountRaw: '0', costBasisRaw: '0' }],
+      fills: [],
+    }));
+    const report = await auditDataDirectory(dir);
+    assert.equal(report.checkedFiles, 2);
+    assert.ok(report.summary.errors >= 2);
+    assert.ok(report.summary.warnings >= 2);
+    assert.ok(report.findings.some(item => item.file === 'wallet-trades.jsonl' && item.message.includes('JSON invalide')));
+    assert.ok(report.findings.some(item => item.file === 'paper-trading.json' && item.message.includes('Solde invalide')));
+    assert.equal(await fs.readFile(trades, 'utf8'), original);
+    assert.equal(report.files.find(file => file.name === 'wallet-trades.jsonl').status, 'error');
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
+});
+
+test('reports absent files separately from errors', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'bot-gui-health-empty-'));
+  try {
+    const report = await auditDataDirectory(dir);
+    assert.equal(report.checkedFiles, 0);
+    assert.equal(report.summary.errors, 0);
+    assert.equal(report.summary.missing, report.files.length);
+    assert.ok(report.files.every(file => file.status === 'missing'));
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
