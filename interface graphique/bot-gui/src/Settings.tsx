@@ -90,7 +90,7 @@ export default function SettingsPage({ botRunning }: { botRunning: boolean }) {
       {error && <div className="alert">{error}</div>}
       {notice && <div className="settings-success">{notice}</div>}
       {botRunning && <div className="settings-restart">Le bot est actuellement lancé. Toute modification sera prise en compte après son redémarrage.</div>}
-      <div className="settings-actions"><span>Les clés API existantes sont conservées et ne sont jamais affichées.</span><button className="bot-start" type="submit" disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer la configuration"}</button></div>
+      <div className="settings-actions"><span>La clé Jupiter existante est conservée et masquée. Attention : une clé fournisseur incluse dans une URL RPC reste visible dans son champ.</span><button className="bot-start" type="submit" disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer la configuration"}</button></div>
     </form>
   </div>;
 }
