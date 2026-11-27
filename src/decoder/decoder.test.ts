@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseTokenBalanceChanges, parseWalletTradeChanges } from "./balance-parser.js";
-import { TransactionDecoder } from "./decoder.js";
 import type { ParsedTransaction, TokenBalance } from "./types.js";
 
 const wallet = "wallet-A";
@@ -193,6 +192,13 @@ test("strict wallet discovery rejects quote movements in the wrong direction", (
 
 
 test("requests support for versioned Solana transaction version 1", async () => {
+  // Import after setting valid dummy RPC URLs: importing the decoder loads the
+  // application config, but this unit test uses a mocked Connection only.
+  process.env.RPC_HTTP_URL ??= "https://example.invalid";
+  process.env.RPC_WS_URL ??= "wss://example.invalid";
+  process.env.ENABLE_DEX_DISCOVERY ??= "true";
+  const { TransactionDecoder } = await import("./decoder.js");
+
   const requestOptions: Array<{ maxSupportedTransactionVersion?: number }> = [];
   const connection = {
     getTransaction: async (
