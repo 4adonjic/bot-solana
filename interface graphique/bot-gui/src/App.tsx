@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Snapshot } from "./types";
 import SettingsPage from "./Settings";
+import ManualWallets from "./ManualWallets";
 
 type Page = "overview" | "wallets" | "paper" | "activity" | "settings";
 const nav: Array<{ id: Page; label: string; icon: string }> = [
@@ -121,6 +122,7 @@ export default function App() {
           </Panel></div>
         </div>}
         {page === "wallets" && <div className="content">
+          <ManualWallets />
           <div className="metrics three"><Metric label="Candidats découverts" value={snapshot.counts.candidates} /><Metric label="Wallets suivis" value={snapshot.counts.trackedWallets} /><Metric label="Wallets actifs" value={activeCount} /></div>
           <Panel title="Watchlist automatique"><DataTable headers={["WALLET", "QUOTE", "SCORE", "TENDANCE", "SÉLECTIONS", "DERNIÈRE SÉLECTION", "ÉTAT"]}>
             {snapshot.watchlist.map(w => <tr key={w.wallet + w.quoteMint}><td className="mono">{short(w.wallet)}</td><td>{asset(w.quoteMint)}</td><td><span className="score">{w.reliabilityScore}<small>/100</small></span></td><td>{w.trend}</td><td>{w.selectionCount}</td><td>{date(w.lastSelectedAt)}</td><td><span className={w.active ? "pill green" : "pill gray"}>{w.active ? "Actif" : "En pause"}</span></td></tr>)}
