@@ -17,26 +17,29 @@ async function readJsonLines(file) {
 }
 
 async function loadDashboardSnapshot(directory) {
-  const [candidateData, watchlistData, paperData, trades] = await Promise.all([
+  const [candidateData, watchlistData, paperData, rankingData, trades] = await Promise.all([
     readJson(path.join(directory, 'wallet-candidates.json'), { version: 1, wallets: {} }),
     readJson(path.join(directory, 'wallet-watchlist.json'), { version: 1, wallets: {} }),
     readJson(path.join(directory, 'paper-trading.json'), null),
+    readJson(path.join(directory, 'wallet-rankings.json'), { version: 1, wallets: [] }),
     readJsonLines(path.join(directory, 'wallet-trades.jsonl')),
   ]);
   const candidates = candidateData && candidateData.version === 1 && candidateData.wallets && typeof candidateData.wallets === 'object'
     ? Object.values(candidateData.wallets) : [];
   const watchlist = watchlistData && watchlistData.version === 1 && watchlistData.wallets && typeof watchlistData.wallets === 'object'
     ? Object.values(watchlistData.wallets) : [];
+  const rankings = rankingData && rankingData.version === 1 && Array.isArray(rankingData.wallets) ? rankingData.wallets : [];
   const paper = paperData && paperData.version === 1 && paperData.balances && Array.isArray(paperData.positions) && Array.isArray(paperData.fills)
     ? paperData : null;
   return {
     generatedAt: new Date().toISOString(), dataDirectory: directory,
-    sources: { candidates: candidates.length > 0, trades: trades.length > 0, watchlist: watchlist.length > 0, paper: paper !== null },
+    sources: { candidates: candidates.length > 0, rankings: rankings.length > 0, trades: trades.length > 0, watchlist: watchlist.length > 0, paper: paper !== null },
     counts: {
-      candidates: candidates.length, observedTrades: trades.length, trackedWallets: watchlist.length,
+      candidates: candidates.length, evaluatedWallets: rankings.length, observedTrades: trades.length, trackedWallets: watchlist.length,
       activeWallets: watchlist.filter(x => x && x.active === true).length,
       paperFills: paper ? paper.fills.length : 0, openPositions: paper ? paper.positions.length : 0,
     },
+    rankings: rankings.sort((a,b) => Number(b.eligible)-Number(a.eligible) || Number(b.reliabilityScore ?? -1)-Number(a.reliabilityScore ?? -1)),
     candidates: candidates.sort((a,b) => String(b.lastSeenAt || '').localeCompare(String(a.lastSeenAt || ''))).slice(0,100),
     watchlist: watchlist.sort((a,b) => Number(b.active)-Number(a.active) || Number(b.reliabilityScore || 0)-Number(a.reliabilityScore || 0)),
     trades: trades.slice(-100).reverse(),
