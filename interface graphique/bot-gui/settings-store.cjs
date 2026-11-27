@@ -98,14 +98,14 @@ async function addObservedWallet(envFile, wallet) {
   if (!isSolanaPublicKey(value)) throw new Error('Adresse Solana invalide.');
   const current = await readSettings(envFile);
   if (!current.configured) throw new Error('Configure d’abord les RPC dans Paramètres.');
-  const wallets = [...new Set([...current.targetWallets.split(/[\\s,;]+/).filter(Boolean), value])];
+  const wallets = [...new Set([...current.targetWallets.split(/[\s,;]+/).filter(Boolean), value])];
   return saveSettings(envFile, { ...current, targetWallets: wallets.join('\\n') });
 }
 
 async function removeObservedWallet(envFile, wallet) {
   const current = await readSettings(envFile);
   if (!current.configured) throw new Error('Configuration RPC absente.');
-  const wallets = current.targetWallets.split(/[\\s,;]+/).filter(Boolean).filter(value => value !== wallet);
+  const wallets = current.targetWallets.split(/[\s,;]+/).filter(Boolean).filter(value => value !== wallet);
   return saveSettings(envFile, { ...current, targetWallets: wallets.join('\\n'), enableDexDiscovery: current.enableDexDiscovery || wallets.length === 0 });
 }
 
