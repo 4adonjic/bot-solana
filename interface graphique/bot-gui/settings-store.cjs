@@ -99,7 +99,7 @@ async function addObservedWallet(envFile, wallet) {
   const current = await readSettings(envFile);
   if (!current.configured) throw new Error('Configure d’abord les RPC dans Paramètres.');
   const wallets = [...new Set([...current.targetWallets.split(/[\s,;]+/).filter(Boolean), value])];
-  return saveSettings(envFile, { ...current, targetWallets: wallets.join('\\n') });
+  return saveSettings(envFile, { ...current, targetWallets: wallets.join('\n') });
 }
 
 async function removeObservedWallet(envFile, wallet) {
