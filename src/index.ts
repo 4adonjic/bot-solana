@@ -1,6 +1,7 @@
 import { Connection } from "@solana/web3.js";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
+import { rateLimitedRpcFetch } from "./core/rpc-fetch.js";
 import { defaultRadar } from "./radar/radar.js";
 import { defaultDexRadar } from "./radar/dex-radar.js";
 import { defaultDecoder } from "./decoder/decoder.js";
@@ -16,7 +17,7 @@ import { WalletSelectionStore } from "./brain/wallet-selection-store.js";
 import { PaperTradingEngine } from "./brain/paper-trading.js";
 
 async function main(): Promise<void> {
-  const connection = new Connection(config.rpcHttpUrl, "confirmed");
+  const connection = new Connection(config.rpcHttpUrl, { commitment: "confirmed", fetch: rateLimitedRpcFetch });
   const analyzeLimitedSecurity = createConcurrencyLimiter(
     (mint: string) => analyzeTokenSecurity(connection, mint),
     { maxConcurrent: 2, maxQueued: 100 },
