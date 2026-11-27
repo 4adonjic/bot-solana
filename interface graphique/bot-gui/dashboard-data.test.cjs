@@ -26,6 +26,11 @@ test('loads the real persistent file formats used by the bot stores', async () =
     assert.equal(snapshot.counts.observedTrades, 1);
     assert.equal(snapshot.sources.paper, true);
     assert.deepEqual(snapshot.paper.performance.USDC, { realizedPnlRaw: '15', totalFeesRaw: '5', closedTrades: 1, wins: 1, losses: 0, slippageBpsTotal: 550, slippageSamples: 2, averageSlippageBps: 275 });
+    assert.deepEqual(snapshot.paper.walletPerformance[0], {
+      wallet: 'walletA', quoteMint: 'USDC', realizedPnlRaw: '15', totalFeesRaw: '5',
+      buys: 1, sells: 1, closedTrades: 1, wins: 1, losses: 0,
+      slippageBpsTotal: 550, slippageSamples: 2, averageSlippageBps: 275,
+    });
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
