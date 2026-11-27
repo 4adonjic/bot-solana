@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { isSolanaPublicKey, validateSettings, readSettings, saveSettings } = require('./settings-store.cjs');
+const { isSolanaPublicKey, validateSettings, readSettings, saveSettings, addObservedWallet, removeObservedWallet } = require('./settings-store.cjs');
 
 const valid = {
   rpcHttpUrl: 'https://rpc.example.com',
@@ -41,5 +41,24 @@ test('saves editable settings without dropping the Jupiter API key', async () =>
     assert.match(content, /JUPITER_API_KEY="secret-value"/);
     assert.match(content, /CUSTOM_FLAG="keep"/);
     assert.doesNotMatch(JSON.stringify(saved), /secret-value/);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+test('adds and removes observed wallets without disabling the last discovery source', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'solana-observed-wallets-'));
+  const envFile = path.join(directory, '.env');
+  const first = '11111111111111111111111111111111';
+  const second = 'So11111111111111111111111111111111111111112';
+  try {
+    await saveSettings(envFile, { ...valid, targetWallets: first });
+    let settings = await addObservedWallet(envFile, second);
+    assert.deepEqual(settings.targetWallets.split(/\\s+/).filter(Boolean), [first, second]);
+    settings = await removeObservedWallet(envFile, first);
+    assert.equal(settings.targetWallets, second);
+    await assert.rejects(() => removeObservedWallet(envFile, second), /Active la découverte DEX/);
+    await saveSettings(envFile, { ...settings, enableDexDiscovery: true, targetWallets: second });
+    settings = await removeObservedWallet(envFile, second);
+    assert.equal(settings.targetWallets, '');
+    assert.equal(settings.enableDexDiscovery, true);
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
