@@ -78,7 +78,7 @@ export class PaperTradingEngine {
   private readonly minSlippageBps: number;
   private readonly maxSlippageBps: number;
   private readonly copyDelayMs: number;
-  private readonly quoteProvider?: PaperQuoteProvider;
+  private readonly quoteProvider: PaperQuoteProvider | undefined;
   private readonly feeBps: number;
   private readonly maxFills: number;
   private state: PaperTradingSnapshot;
