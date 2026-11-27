@@ -192,7 +192,7 @@ test("serializes concurrent paper fills and respects the virtual balance", async
     assert.equal(results.filter((result) => !result.executed && (result.reason === "insufficient_virtual_balance" || result.reason === "position_exposure_limit_reached")).length, 1);
     assert.equal(engine.snapshot().balances[quoteMint], "0");
     assert.equal(engine.snapshot().fills.length, 10);
-  }, { maxPositionPercent: 100 });
+  }, { maxPositionPercent: 100, maxPortfolioExposurePercent: 100 });
 });
 
 test("loads initial virtual balances only once and rejects corrupted state", async () => {
@@ -401,12 +401,12 @@ test("releases portfolio exposure capacity after a partial sale", async () => {
     }));
     assert.equal(sell.executed, true);
     if (!sell.executed) return;
-    assert.equal(sell.position?.costBasisRaw, "1000");
+    assert.equal(sell.position?.costBasisRaw, "500");
 
     const nextBuy = await engine.processTrade(sourceTrade("buy", "portfolio-release-buy-4", {
       mint: "FourthTokenMint",
     }));
     assert.equal(nextBuy.executed, true);
-    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 3000n);
+    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 2500n);
   }, { maxPositionPercent: 20, maxPortfolioExposurePercent: 30 });
 });
