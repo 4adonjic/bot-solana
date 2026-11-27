@@ -22,6 +22,7 @@ export interface PaperTradingOptions {
   maxSlippageBps?: number;
   maxPriceImpactPercent?: number;
   maxPositionPercent?: number;
+  maxDailyLossPercent?: number;
   copyDelayMs?: number;
   quoteProvider?: PaperQuoteProvider;
   feeBps?: number;
@@ -48,6 +49,7 @@ export interface PaperFill {
   feeQuoteRaw: string;
   slippageBps: number;
   observedAt: string;
+  realizedPnlRaw?: string;
 }
 
 export interface PaperTradingSnapshot {
@@ -81,6 +83,7 @@ export class PaperTradingEngine {
   private readonly maxSlippageBps: number;
   private readonly maxPriceImpactPercent: number;
   private readonly maxPositionPercent: number;
+  private readonly maxDailyLossPercent: number;
   private readonly copyDelayMs: number;
   private readonly quoteProvider: PaperQuoteProvider | undefined;
   private readonly feeBps: number;
@@ -98,6 +101,7 @@ export class PaperTradingEngine {
     this.maxSlippageBps = options.maxSlippageBps ?? this.slippageBps;
     this.maxPriceImpactPercent = options.maxPriceImpactPercent ?? 5;
     this.maxPositionPercent = options.maxPositionPercent ?? 20;
+    this.maxDailyLossPercent = options.maxDailyLossPercent ?? 5;
     this.copyDelayMs = options.copyDelayMs ?? (options.quoteProvider ? 3_000 : 0);
     this.quoteProvider = options.quoteProvider;
     this.feeBps = options.feeBps ?? 10;
@@ -131,6 +135,9 @@ export class PaperTradingEngine {
     }
     if (!Number.isInteger(this.maxPositionPercent) || this.maxPositionPercent < 1 || this.maxPositionPercent > 100) {
       throw new Error("maxPositionPercent must be an integer between 1 and 100");
+    }
+    if (!Number.isInteger(this.maxDailyLossPercent) || this.maxDailyLossPercent < 1 || this.maxDailyLossPercent > 100) {
+      throw new Error("maxDailyLossPercent must be an integer between 1 and 100");
     }
     if (!Number.isSafeInteger(this.copyDelayMs) || this.copyDelayMs < 0 || this.copyDelayMs > 60_000) {
       throw new Error("copyDelayMs must be between 0 and 60000");
@@ -219,6 +226,20 @@ export class PaperTradingEngine {
     if (this.state.fills.length >= this.maxFills) {
       return { executed: false, reason: "paper_fill_history_full" };
     }
+    if (trade.side === "buy") {
+      const tradeDate = new Date(trade.observedAt);
+      if (!Number.isFinite(tradeDate.getTime())) {
+        return { executed: false, reason: "invalid_trade_timestamp" };
+      }
+      const utcDay = tradeDate.toISOString().slice(0, 10);
+      const dailyRealizedPnl = this.state.fills
+        .filter((fill) => fill.quoteMint === trade.quoteMint && fill.observedAt.slice(0, 10) === utcDay)
+        .reduce((total, fill) => total + (fill.realizedPnlRaw && /^-?\\d+$/.test(fill.realizedPnlRaw) ? BigInt(fill.realizedPnlRaw) : 0n), 0n);
+      const dailyLossLimit = (BigInt(asset.initialBalanceRaw) * BigInt(this.maxDailyLossPercent)) / 100n;
+      if (dailyRealizedPnl <= -dailyLossLimit) {
+        return { executed: false, reason: "daily_loss_limit_reached" };
+      }
+    }
 
     const balances = { ...this.state.balances };
     const positions = this.state.positions.map((position) => ({ ...position }));
@@ -239,6 +260,7 @@ export class PaperTradingEngine {
     let quoteAmount: bigint;
     let fee: bigint;
     let nextPosition: PaperPosition | null;
+    let realizedPnlRaw: string | undefined;
 
     if (trade.side === "buy") {
       const maxPositionCost = (BigInt(asset.initialBalanceRaw) * BigInt(this.maxPositionPercent)) / 100n;
@@ -326,6 +348,7 @@ export class PaperTradingEngine {
       const costConsumed = tokenAmount === paperPositionTokens
         ? BigInt(position.costBasisRaw)
         : (BigInt(position.costBasisRaw) * tokenAmount) / paperPositionTokens;
+      realizedPnlRaw = (quoteAmount - costConsumed).toString();
       const remainingTokens = paperPositionTokens - tokenAmount;
       if (remainingTokens === 0n) {
         positions.splice(positionIndex, 1);
@@ -353,6 +376,7 @@ export class PaperTradingEngine {
       feeQuoteRaw: fee.toString(),
       slippageBps,
       observedAt: trade.observedAt,
+      ...(realizedPnlRaw === undefined ? {} : { realizedPnlRaw }),
     };
     const nextState: PaperTradingSnapshot = {
       version: 1,
@@ -412,7 +436,8 @@ export class PaperTradingEngine {
       typeof fill.tokenAmountRaw === "string" && /^\d+$/.test(fill.tokenAmountRaw) &&
       typeof fill.quoteAmountRaw === "string" && /^\d+$/.test(fill.quoteAmountRaw) &&
       typeof fill.feeQuoteRaw === "string" && /^\d+$/.test(fill.feeQuoteRaw) &&
-      Number.isInteger(fill.slippageBps) && typeof fill.observedAt === "string",
+      Number.isInteger(fill.slippageBps) && typeof fill.observedAt === "string" &&
+      (fill.realizedPnlRaw === undefined || (typeof fill.realizedPnlRaw === "string" && /^-?\\d+$/.test(fill.realizedPnlRaw))),
     );
   }
 
