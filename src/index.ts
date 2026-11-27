@@ -11,6 +11,7 @@ import { createSecurityAnalysisCache } from "./brain/security-cache.js";
 import { createConcurrencyLimiter } from "./brain/concurrency-limit.js";
 import { WalletCandidateStore } from "./brain/wallet-candidate-store.js";
 import { WalletTradeStore } from "./brain/wallet-trade-store.js";
+import { WalletHistoryBackfill } from "./brain/wallet-history-backfill.js";
 import { calculateWalletPerformance } from "./brain/wallet-performance.js";
 import { rankWallets } from "./brain/wallet-ranking.js";
 import { selectWalletsForPaperTrading, walletSelectionKey } from "./brain/wallet-selection.js";
@@ -91,6 +92,16 @@ async function main(): Promise<void> {
     await candidateStore.init();
     const tradeStore = new WalletTradeStore();
     await tradeStore.init();
+    const historyBackfill = new WalletHistoryBackfill({
+      connection,
+      decoder: defaultDecoder,
+      candidates: candidateStore,
+      trades: tradeStore,
+      walletsPerRun: 1,
+      signaturesPerWalletRun: 5,
+      maxSignaturesPerWallet: 5_000,
+    });
+    await historyBackfill.init();
     const selectionStore = new WalletSelectionStore();
     await selectionStore.init();
     const paperEngine = config.enablePaperTrading ? new PaperTradingEngine() : null;
@@ -148,6 +159,20 @@ async function main(): Promise<void> {
       "Registres persistants chargés",
     );
     await refreshWalletRanking();
+    const runHistoryBackfill = async (): Promise<void> => {
+      try {
+        const result = await historyBackfill.runBatch();
+        if (result.signaturesScanned > 0) {
+          logger.info(result, "Backfill historique des wallets (lecture seule)");
+          if (result.tradesInserted > 0) await refreshWalletRanking();
+        }
+      } catch (error) {
+        logger.warn({ error }, "Échec d’un lot de backfill historique; reprise au prochain cycle");
+      }
+    };
+    void runHistoryBackfill();
+    const historyBackfillInterval = setInterval(() => void runHistoryBackfill(), 15_000);
+    historyBackfillInterval.unref();
     let newTradesSinceRanking = 0;
     const rankingRefreshInterval = 100;
     // Keep discovery below the shared Helius HTTP RPC budget. DEX logs can
