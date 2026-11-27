@@ -81,7 +81,7 @@ export default function SettingsPage({ botRunning }: { botRunning: boolean }) {
       <section className="panel settings-panel">
         <div className="panel-head"><h2>Modules du bot</h2></div>
         <div className="settings-toggles">
-          <label className="settings-toggle"><div><b>Découverte DEX</b><small>Repère les transactions sur les programmes DEX et construit les statistiques des wallets.</small></div><input type="checkbox" checked={settings.enableDexDiscovery} onChange={event => update("enableDexDiscovery", event.target.checked)} /></label>
+          <label className="settings-toggle"><div><b>Découverte DEX</b><small>Repère les transactions sur les programmes DEX et construit les statistiques des wallets.</small></div><input type="checkbox" checked={settings.enableDexDiscovery} onChange={event => { update("enableDexDiscovery", event.target.checked); if (!event.target.checked) update("enablePaperTrading", false); }} /></label>
           <label className={"settings-toggle " + (!settings.enableDexDiscovery ? "disabled" : "")}><div><b>Paper Trading</b><small>Simule les achats et ventes des wallets sélectionnés, sans envoyer de transaction réelle.</small></div><input type="checkbox" checked={settings.enablePaperTrading} disabled={!settings.enableDexDiscovery} onChange={event => update("enablePaperTrading", event.target.checked)} /></label>
         </div>
         <div className="security-note"><b>Protection permanente</b><p>Le mode réel n'existe pas. La simulation conserve les contrôles de sécurité du token, la liquidité minimale et les limites de risque déjà intégrées. Cette page ne permet pas de les contourner.</p></div>
