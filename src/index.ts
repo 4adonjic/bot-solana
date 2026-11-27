@@ -137,9 +137,23 @@ async function main(): Promise<void> {
     await refreshWalletRanking();
     let newTradesSinceRanking = 0;
     const rankingRefreshInterval = 100;
+    // Bound DEX transaction RPC calls to avoid flooding free-tier providers.
+    const decodeCandidatesLimited = createConcurrencyLimiter(
+      (signature: string) => defaultDecoder.decodeWalletCandidates(signature),
+      { maxConcurrent: 2, maxQueued: 50 },
+    );
 
     defaultDexRadar.setOnTransaction(async (signature, slot) => {
-      const candidates = await defaultDecoder.decodeWalletCandidates(signature);
+      let candidates;
+      try {
+        candidates = await decodeCandidatesLimited(signature);
+      } catch (error) {
+        logger.warn(
+          { signature, error },
+          "File de décodage DEX saturée : transaction ignorée pour protéger le RPC",
+        );
+        return;
+      }
       if (candidates.length === 0) return;
 
       for (const candidate of candidates) {
