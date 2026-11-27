@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('botDashboard', Object.freeze({
   getSnapshot: () => ipcRenderer.invoke('dashboard:get-snapshot'),
+  getHealthReport: () => ipcRenderer.invoke('health:get-report'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: settings => ipcRenderer.invoke('settings:save', settings),
   getManualWallets: () => ipcRenderer.invoke('wallets:get-manual'),
