@@ -129,7 +129,7 @@ async function main(): Promise<void> {
         const parsed: unknown = JSON.parse(await readFile('data/manual-paper-wallets.json', 'utf8'));
         if (typeof parsed !== 'object' || parsed === null || !('version' in parsed) || parsed.version !== 1 ||
           !('wallets' in parsed) || !Array.isArray(parsed.wallets) ||
-          !parsed.wallets.every((wallet) => typeof wallet === 'string')) {
+          !parsed.wallets.every((wallet) => typeof wallet === 'string') || parsed.wallets.length > 100) {
           throw new Error('Format du fichier manual-paper-wallets.json invalide');
         }
         const wallets = parsed.wallets as string[];
