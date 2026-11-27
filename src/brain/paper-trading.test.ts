@@ -41,7 +41,7 @@ function sourceTrade(
 
 async function withEngine(
   run: (engine: PaperTradingEngine, filePath: string) => Promise<void>,
-  options: Pick<PaperTradingOptions, "maxPositionPercent" | "maxDailyLossPercent"> = {},
+  options: Pick<PaperTradingOptions, "maxPositionPercent" | "maxPortfolioExposurePercent" | "maxDailyLossPercent"> = {},
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "solana-paper-"));
   const filePath = join(directory, "paper.json");
@@ -189,10 +189,10 @@ test("serializes concurrent paper fills and respects the virtual balance", async
       engine.processTrade(sourceTrade("buy", "parallel-11")),
     ]);
     assert.equal(results.filter((result) => result.executed).length, 10);
-    assert.equal(results.filter((result) => !result.executed && (result.reason === "insufficient_virtual_balance" || result.reason === "position_exposure_limit_reached")).length, 1);
+    assert.equal(results.filter((result) => !result.executed && (result.reason === "insufficient_virtual_balance" || result.reason === "position_exposure_limit_reached" || result.reason === "portfolio_exposure_limit_reached")).length, 1);
     assert.equal(engine.snapshot().balances[quoteMint], "0");
     assert.equal(engine.snapshot().fills.length, 10);
-  }, { maxPositionPercent: 100 });
+  }, { maxPositionPercent: 100, maxPortfolioExposurePercent: 100 });
 });
 
 test("loads initial virtual balances only once and rejects corrupted state", async () => {
@@ -359,4 +359,55 @@ test("resets the daily loss calculation at the next UTC day", async () => {
     }));
     assert.equal(nextDayBuy.executed, true);
   }, { maxDailyLossPercent: 5 });
+});
+
+
+test("caps total open cost basis across different token positions", async () => {
+  await withEngine(async (engine) => {
+    const first = await engine.processTrade(sourceTrade("buy", "portfolio-cap-buy-1", {
+      mint: "FirstTokenMint",
+    }));
+    const second = await engine.processTrade(sourceTrade("buy", "portfolio-cap-buy-2", {
+      mint: "SecondTokenMint",
+    }));
+    const third = await engine.processTrade(sourceTrade("buy", "portfolio-cap-buy-3", {
+      mint: "ThirdTokenMint",
+    }));
+    assert.equal(first.executed, true);
+    assert.equal(second.executed, true);
+    assert.equal(third.executed, true);
+    if (!third.executed) return;
+    assert.equal(third.position?.costBasisRaw, "1000");
+    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 3000n);
+
+    const blocked = await engine.processTrade(sourceTrade("buy", "portfolio-cap-buy-4", {
+      mint: "FourthTokenMint",
+    }));
+    assert.deepEqual(blocked, { executed: false, reason: "portfolio_exposure_limit_reached" });
+  }, { maxPositionPercent: 20, maxPortfolioExposurePercent: 30 });
+});
+
+test("releases portfolio exposure capacity after a partial sale", async () => {
+  await withEngine(async (engine) => {
+    await engine.processTrade(sourceTrade("buy", "portfolio-release-buy-1", { mint: "FirstTokenMint" }));
+    await engine.processTrade(sourceTrade("buy", "portfolio-release-buy-2", { mint: "SecondTokenMint" }));
+    await engine.processTrade(sourceTrade("buy", "portfolio-release-buy-3", { mint: "ThirdTokenMint" }));
+
+    const sell = await engine.processTrade(sourceTrade("sell", "portfolio-release-sell", {
+      mint: "FirstTokenMint",
+      tokenAmountRaw: "50",
+      quoteAmountRaw: "600",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "50",
+    }));
+    assert.equal(sell.executed, true);
+    if (!sell.executed) return;
+    assert.equal(sell.position?.costBasisRaw, "500");
+
+    const nextBuy = await engine.processTrade(sourceTrade("buy", "portfolio-release-buy-4", {
+      mint: "FourthTokenMint",
+    }));
+    assert.equal(nextBuy.executed, true);
+    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 3000n);
+  }, { maxPositionPercent: 20, maxPortfolioExposurePercent: 30 });
 });

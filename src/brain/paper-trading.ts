@@ -22,6 +22,7 @@ export interface PaperTradingOptions {
   maxSlippageBps?: number;
   maxPriceImpactPercent?: number;
   maxPositionPercent?: number;
+  maxPortfolioExposurePercent?: number;
   maxDailyLossPercent?: number;
   copyDelayMs?: number;
   quoteProvider?: PaperQuoteProvider;
@@ -83,6 +84,7 @@ export class PaperTradingEngine {
   private readonly maxSlippageBps: number;
   private readonly maxPriceImpactPercent: number;
   private readonly maxPositionPercent: number;
+  private readonly maxPortfolioExposurePercent: number;
   private readonly maxDailyLossPercent: number;
   private readonly copyDelayMs: number;
   private readonly quoteProvider: PaperQuoteProvider | undefined;
@@ -101,6 +103,7 @@ export class PaperTradingEngine {
     this.maxSlippageBps = options.maxSlippageBps ?? this.slippageBps;
     this.maxPriceImpactPercent = options.maxPriceImpactPercent ?? 5;
     this.maxPositionPercent = options.maxPositionPercent ?? 20;
+    this.maxPortfolioExposurePercent = options.maxPortfolioExposurePercent ?? 60;
     this.maxDailyLossPercent = options.maxDailyLossPercent ?? 5;
     this.copyDelayMs = options.copyDelayMs ?? (options.quoteProvider ? 3_000 : 0);
     this.quoteProvider = options.quoteProvider;
@@ -135,6 +138,9 @@ export class PaperTradingEngine {
     }
     if (!Number.isInteger(this.maxPositionPercent) || this.maxPositionPercent < 1 || this.maxPositionPercent > 100) {
       throw new Error("maxPositionPercent must be an integer between 1 and 100");
+    }
+    if (!Number.isInteger(this.maxPortfolioExposurePercent) || this.maxPortfolioExposurePercent < 1 || this.maxPortfolioExposurePercent > 100) {
+      throw new Error("maxPortfolioExposurePercent must be an integer between 1 and 100");
     }
     if (!Number.isInteger(this.maxDailyLossPercent) || this.maxDailyLossPercent < 1 || this.maxDailyLossPercent > 100) {
       throw new Error("maxDailyLossPercent must be an integer between 1 and 100");
@@ -266,12 +272,21 @@ export class PaperTradingEngine {
       const maxPositionCost = (BigInt(asset.initialBalanceRaw) * BigInt(this.maxPositionPercent)) / 100n;
       const currentPositionCost = position ? BigInt(position.costBasisRaw) : 0n;
       const remainingPositionCapacity = maxPositionCost - currentPositionCost;
+      const maxPortfolioExposure = (BigInt(asset.initialBalanceRaw) * BigInt(this.maxPortfolioExposurePercent)) / 100n;
+      const currentPortfolioExposure = positions
+        .filter((item) => item.quoteMint === trade.quoteMint)
+        .reduce((total, item) => total + BigInt(item.costBasisRaw), 0n);
+      const remainingPortfolioCapacity = maxPortfolioExposure - currentPortfolioExposure;
+      if (remainingPortfolioCapacity <= 0n) {
+        return { executed: false, reason: "portfolio_exposure_limit_reached" };
+      }
       if (remainingPositionCapacity <= 0n) {
         return { executed: false, reason: "position_exposure_limit_reached" };
       }
       let budget = BigInt(asset.buySizeRaw);
       if (budget > currentBalance) budget = currentBalance;
       if (budget > remainingPositionCapacity) budget = remainingPositionCapacity;
+      if (budget > remainingPortfolioCapacity) budget = remainingPortfolioCapacity;
       if (budget <= 0n) return { executed: false, reason: "insufficient_virtual_balance" };
       fee = (budget * BigInt(this.feeBps)) / 10_000n;
       const marketSpend = budget - fee;

@@ -117,6 +117,7 @@ async function main(): Promise<void> {
           maxSlippageBps: 500,
           maxPriceImpactPercent: 5,
           maxPositionPercent: 20,
+          maxPortfolioExposurePercent: 60,
           maxDailyLossPercent: 5,
           feeBps: 10,
         })
@@ -136,6 +137,7 @@ async function main(): Promise<void> {
           slippageRangeBps: [200, 500],
           maxPriceImpactPercent: 5,
           maxPositionPercent: 20,
+          maxPortfolioExposurePercent: 60,
           maxDailyLossPercent: 5,
           minimumLiquidityUsd: 20_000,
           feeBps: 10,
