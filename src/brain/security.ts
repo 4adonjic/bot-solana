@@ -21,7 +21,7 @@ export interface SecurityAssessment {
 }
 
 const LIMITS = {
-  minimumLiquidityUsd: 5_000,
+  minimumLiquidityUsd: 20_000,
   lowLiquidityUsd: 20_000,
   highTop10Percent: 50,
   elevatedTop10Percent: 30,
