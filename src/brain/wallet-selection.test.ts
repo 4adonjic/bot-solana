@@ -31,7 +31,7 @@ function ranking(
     losingDays: 0,
     positiveDayRatePercent: 100,
     openPositionCount: 0,
-    closedTradeCount14d: 10,
+    closedTradeCount14d: 35,
     realizedPnl14dRaw: "100",
     medianTradePnlRaw: "10",
     medianHoldingSeconds: 300,
@@ -70,4 +70,28 @@ test("validates selection limits", () => {
 
 test("selection keys distinguish quote assets for the same wallet", () => {
   assert.notEqual(walletSelectionKey("WalletA", "SOL"), walletSelectionKey("WalletA", "USDC"));
+});
+
+
+test("rejects wallets without enough recent trades or copyable holding times", () => {
+  const good = ranking("Good", 90);
+  assert.deepEqual(selectWalletsForPaperTrading([good]).map((item) => item.wallet), ["Good"]);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, closedTradeCount14d: 29 }]), []);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, medianHoldingSeconds: 9 }]), []);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, medianHoldingSeconds: null }]), []);
+});
+
+test("rejects concentrated profits, non-positive median trades and excessive drawdown", () => {
+  const good = ranking("Good", 90);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, maxProfitConcentrationPercent: 50.01 }]), []);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, medianTradePnlRaw: "0" }]), []);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, maxDrawdownRaw: "61" }]), []);
+  assert.deepEqual(selectWalletsForPaperTrading([{ ...good, grossProfitRaw: "0" }]), []);
+});
+
+test("validates copyability thresholds", () => {
+  assert.throws(() => selectWalletsForPaperTrading([], { minClosedTrades14d: 0 }));
+  assert.throws(() => selectWalletsForPaperTrading([], { minMedianHoldingSeconds: -1 }));
+  assert.throws(() => selectWalletsForPaperTrading([], { maxProfitConcentrationPercent: 101 }));
+  assert.throws(() => selectWalletsForPaperTrading([], { maxDrawdownToGrossProfitPercent: 101 }));
 });
