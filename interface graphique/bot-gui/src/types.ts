@@ -83,6 +83,9 @@ declare global {
       getSnapshot: () => Promise<Snapshot>;
       getSettings: () => Promise<DesktopSettings>;
       saveSettings: (settings: Omit<DesktopSettings, 'configured'>) => Promise<{ settings: DesktopSettings; restartRequired: boolean; botRunning: boolean }>;
+      getManualWallets: () => Promise<{ observed: string[]; paper: string[] }>;
+      addManualWallet: (input: { wallet: string; mode: 'observe' | 'paper' }) => Promise<{ mode: 'observe' | 'paper'; wallets: string[]; restartRequired: boolean }>;
+      removeManualWallet: (input: { wallet: string; mode: 'observe' | 'paper' }) => Promise<{ mode: 'observe' | 'paper'; wallets: string[]; restartRequired: boolean }>;
       getBotStatus: () => Promise<BotStatus>;
       getBotLogs: () => Promise<BotLogEntry[]>;
       startBot: () => Promise<BotStatus>;
