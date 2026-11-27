@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { Connection } from "@solana/web3.js";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
@@ -123,8 +123,30 @@ async function main(): Promise<void> {
         })
       : null;
     let selectedWalletKeys = new Set<string>();
+    const manualPaperWallets = new Set<string>();
+    const refreshManualPaperWallets = async (): Promise<void> => {
+      try {
+        const parsed: unknown = JSON.parse(await readFile('data/manual-paper-wallets.json', 'utf8'));
+        if (typeof parsed !== 'object' || parsed === null || !('version' in parsed) || parsed.version !== 1 ||
+          !('wallets' in parsed) || !Array.isArray(parsed.wallets) ||
+          !parsed.wallets.every((wallet) => typeof wallet === 'string')) {
+          throw new Error('Format du fichier manual-paper-wallets.json invalide');
+        }
+        const wallets = parsed.wallets as string[];
+        for (const wallet of wallets) new (await import('@solana/web3.js')).PublicKey(wallet);
+        manualPaperWallets.clear();
+        for (const wallet of wallets) manualPaperWallets.add(wallet);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          logger.warn({ error }, 'Impossible de recharger les wallets Paper Trading manuels');
+        }
+      }
+    };
     if (paperEngine) {
       await paperEngine.init();
+      await refreshManualPaperWallets();
+      const manualWalletRefreshInterval = setInterval(() => void refreshManualPaperWallets(), 2_000);
+      manualWalletRefreshInterval.unref();
       const paperSnapshot = paperEngine.snapshot();
       logger.warn(
         {
@@ -317,10 +339,11 @@ async function main(): Promise<void> {
             const leader = ranking.find((item) =>
               item.wallet === candidate.wallet && item.quoteMint === candidate.quoteMint,
             );
-            if (!leader?.eligible || !selectedWalletKeys.has(walletSelectionKey(candidate.wallet, candidate.quoteMint))) {
+            const manuallySelected = manualPaperWallets.has(candidate.wallet);
+            if ((!leader?.eligible || !selectedWalletKeys.has(walletSelectionKey(candidate.wallet, candidate.quoteMint))) && !manuallySelected) {
               logger.debug(
                 { wallet: candidate.wallet, quoteMint: candidate.quoteMint, matchedSells: leader?.matchedSellCount ?? 0, activeDays: leader?.activeDays ?? 0 },
-                "Paper Trading ignoré : wallet non retenu par la sélection automatique (échantillon, rentabilité ou score insuffisant)",
+                "Paper Trading ignoré : wallet non retenu automatiquement et non sélectionné manuellement (échantillon, rentabilité ou score insuffisant)",
               );
             } else {
               const security = await analyzeCachedSecurity(candidate.mint);
@@ -339,7 +362,7 @@ async function main(): Promise<void> {
                     minimumLiquidityUsd: 20_000,
                     missingChecks: security.assessment.missingChecks,
                   },
-                  "Paper Trading ignoré : sécurité ou liquidité minimale non validée",
+                  "Paper Trading ignoré : sécurité ou liquidité minimale non validée (même pour les wallets forcés manuellement)",
                 );
               } else {
                 const paperResult = await paperEngine.processTrade({
