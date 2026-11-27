@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Snapshot } from "./types";
+import SettingsPage from "./Settings";
 
 type Page = "overview" | "wallets" | "paper" | "activity" | "settings";
 const nav: Array<{ id: Page; label: string; icon: string }> = [
@@ -182,11 +183,7 @@ export default function App() {
         {page === "activity" && <div className="content"><Panel title="Trades observés"><DataTable headers={["DATE", "SENS", "WALLET", "TOKEN", "SIGNATURE"]}>
           {[...snapshot.trades].reverse().map((t, i) => <tr key={t.signature + i}><td>{date(t.observedAt)}</td><td><span className={"side " + t.side}>{t.side === "buy" ? "ACHAT" : "VENTE"}</span></td><td className="mono">{short(t.wallet)}</td><td className="mono">{short(t.mint)}</td><td className="mono">{short(t.signature)}</td></tr>)}
         </DataTable>{!snapshot.trades.length && <Empty>Aucun trade enregistré.</Empty>}</Panel></div>}
-        {page === "settings" && <div className="content">
-          <Panel title="État des fichiers"><div className="source-list">{Object.entries({ "wallet-candidates.json": snapshot.sources.candidates, "wallet-watchlist.json": snapshot.sources.watchlist, "wallet-trades.jsonl": snapshot.sources.trades, "paper-trading.json": snapshot.sources.paper }).map(([name, ok]) => <div className="source-row" key={name}><span className="mono">{name}</span><span className={ok ? "source-ok" : "source-missing"}>{ok ? "Présent" : "Absent"}</span></div>)}</div><p className="muted path">{snapshot.dataDirectory}</p></Panel>
-          <Panel title="Configuration du moteur"><p>Les paramètres du moteur restent dans son fichier <code>.env</code> : RPC, wallets ciblés, découverte DEX et Paper Trading.</p><p className="muted">Cette première version de la console est volontairement en lecture seule. Elle ne modifie pas les paramètres du bot.</p></Panel>
-          <div className="security-note"><b>Protection des fonds</b><p>Le trading réel n’est pas implémenté. L’interface ne détient aucune clé privée et ne peut pas signer ou envoyer de transaction.</p></div>
-        </div>}
+        {page === "settings" && <SettingsPage botRunning={botStatus.state !== "stopped"} />}
       </>}
       <footer><span>Solana Bot Console <b>0.3.0</b> · Contrôle local</span><span>Dernière actualisation : {updated || "—"}</span></footer>
     </main>
