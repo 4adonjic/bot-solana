@@ -96,9 +96,27 @@ export default function App() {
           <Panel title="Watchlist automatique"><DataTable headers={["WALLET", "QUOTE", "SCORE", "TENDANCE", "SÉLECTIONS", "DERNIÈRE SÉLECTION", "ÉTAT"]}>
             {snapshot.watchlist.map(w => <tr key={w.wallet + w.quoteMint}><td className="mono">{short(w.wallet)}</td><td>{asset(w.quoteMint)}</td><td><span className="score">{w.reliabilityScore}<small>/100</small></span></td><td>{w.trend}</td><td>{w.selectionCount}</td><td>{date(w.lastSelectedAt)}</td><td><span className={w.active ? "pill green" : "pill gray"}>{w.active ? "Actif" : "En pause"}</span></td></tr>)}
           </DataTable>{!snapshot.watchlist.length && <Empty>La watchlist est vide.</Empty>}</Panel>
-          <Panel title="Candidats repérés"><DataTable headers={["WALLET", "OBSERVATIONS", "PREMIÈRE DÉTECTION", "DERNIÈRE DÉTECTION"]}>
-            {snapshot.candidates.map(c => <tr key={c.wallet}><td className="mono">{short(c.wallet)}</td><td>{c.observationCount}</td><td>{date(c.firstSeenAt)}</td><td>{date(c.lastSeenAt)}</td></tr>)}
-          </DataTable>{!snapshot.candidates.length && <Empty>Aucun candidat enregistré. Vérifie la découverte DEX.</Empty>}</Panel>
+          <Panel title="Notes de tous les wallets évalués">
+            <p className="muted">La note est indicative. Un score provisoire ne rend pas un wallet éligible au Paper Trading.</p>
+            <DataTable headers={["WALLET", "QUOTE", "NOTE", "VENTES", "JOURS", "WIN RATE", "PNL BRUT", "STATUT"]}>
+              {snapshot.rankings.map((w, i) => <tr key={w.wallet + w.quoteMint}>
+                <td className="mono">{short(w.wallet)}</td><td>{asset(w.quoteMint)}</td>
+                <td><span className="score">{w.reliabilityScore ?? "—"}<small>/100</small></span></td>
+                <td>{w.matchedSellCount}</td><td>{w.activeDays}</td><td>{w.winRatePercent.toFixed(1)} %</td>
+                <td>{w.realizedPnlRaw}</td>
+                <td><span className={w.eligible && w.status === "positive_history" && (w.reliabilityScore ?? 0) >= 65 ? "pill green" : "pill gray"}>
+                  {w.eligible ? (w.status === "positive_history" ? ((w.reliabilityScore ?? 0) >= 65 ? "Éligible" : "Score trop faible") : w.status === "negative_history" ? "Historique négatif" : "Équilibre") : "Données insuffisantes"}
+                </span></td>
+              </tr>)}
+            </DataTable>
+            {!snapshot.rankings.length && <Empty>Pas encore de performance calculable. Les notes apparaîtront dès que les trades auront des montants de cotation exacts.</Empty>}
+          </Panel>
+          <Panel title="Candidats repérés">
+            <DataTable headers={["WALLET", "OBSERVATIONS", "PREMIÈRE DÉTECTION", "DERNIÈRE DÉTECTION"]}>
+              {snapshot.candidates.map(c => <tr key={c.wallet}><td className="mono">{short(c.wallet)}</td><td>{c.observationCount}</td><td>{date(c.firstSeenAt)}</td><td>{date(c.lastSeenAt)}</td></tr>)}
+            </DataTable>
+            {!snapshot.candidates.length && <Empty>Aucun candidat enregistré. Vérifie la découverte DEX.</Empty>}
+          </Panel>
         </div>}
         {page === "paper" && <div className="content">
           {!snapshot.paper ? <div className="alert">Aucun état Paper Trading trouvé. Active la simulation pour créer le portefeuille virtuel.</div> : <>

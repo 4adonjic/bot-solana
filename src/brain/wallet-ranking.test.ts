@@ -100,7 +100,7 @@ test("excludes estimated timestamps from active-day regularity", () => {
 });
 
 
-test("computes a bounded reliability score and leaves insufficient samples unscored", () => {
+test("computes provisional bounded reliability scores for insufficient samples", () => {
   const trades: PerformanceTrade[] = [];
   for (let index = 0; index < 10; index++) {
     const day = index < 4 ? "01" : index < 7 ? "02" : "03";
@@ -119,5 +119,7 @@ test("computes a bounded reliability score and leaves insufficient samples unsco
   assert.ok(scored.reliabilityScore !== null);
   assert.ok(scored.reliabilityScore >= 0 && scored.reliabilityScore <= 100);
   assert.ok(tooNew);
-  assert.equal(tooNew.reliabilityScore, null);
+  assert.ok(tooNew.reliabilityScore !== null);
+  assert.ok(tooNew.reliabilityScore >= 0 && tooNew.reliabilityScore <= 100);
+  assert.equal(tooNew.status, "insufficient_sample");
 });
