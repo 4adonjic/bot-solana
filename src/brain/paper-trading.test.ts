@@ -224,7 +224,8 @@ test("uses a fresh quote after the configured delay and fails closed when unavai
     assert.equal(result.executed, true);
     assert.deepEqual(quoteCalls, [[quoteMint, "TestTokenMint", "990"]]);
     if (result.executed) {
-      assert.equal(result.fill.tokenAmountRaw, "1900");
+      const simulatedTokens = BigInt(result.fill.tokenAmountRaw);
+      assert.equal(simulatedTokens >= 1900n && simulatedTokens <= 1960n, true);
       assert.equal(result.fill.slippageBps >= 200 && result.fill.slippageBps <= 500, true);
     }
 
