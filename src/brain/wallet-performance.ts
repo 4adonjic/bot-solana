@@ -19,7 +19,16 @@ export interface PerformanceTrade {
   timestampIsEstimated?: boolean;
 }
 
+export interface ClosedTradePerformance {
+  pnlRaw: string;
+  /** Reliable transaction timestamp; omitted when the block time was estimated. */
+  closedAt?: string;
+  /** FIFO quantity-weighted holding duration; omitted if any matched lot lacks reliable timestamps. */
+  holdingDurationSeconds?: number;
+}
+
 export interface WalletPerformance {
+  closedTrades: ClosedTradePerformance[];
   wallet: string;
   mint: string;
   quoteMint: string;
@@ -47,6 +56,7 @@ export interface WalletPerformance {
 interface Lot {
   quantity: bigint;
   cost: bigint;
+  openedAt?: number;
 }
 
 interface MutablePerformance {
@@ -67,6 +77,7 @@ interface MutablePerformance {
   unmatchedSoldToken: bigint;
   realizedPnl: bigint;
   dailyRealizedPnl: Map<string, bigint>;
+  closedTrades: ClosedTradePerformance[];
   lots: Lot[];
 }
 
@@ -131,6 +142,7 @@ export function calculateWalletPerformance(
         unmatchedSoldToken: 0n,
         realizedPnl: 0n,
         dailyRealizedPnl: new Map(),
+        closedTrades: [],
         lots: [],
       };
       groups.set(key, created);
@@ -140,7 +152,12 @@ export function calculateWalletPerformance(
     if (trade.side === "buy") {
       group.buyCount++;
       group.boughtToken += quantity;
-      group.lots.push({ quantity, cost: quoteAmount });
+      const openedAt = trade.timestampIsEstimated === true ? Number.NaN : Date.parse(trade.observedAt);
+      group.lots.push({
+        quantity,
+        cost: quoteAmount,
+        ...(Number.isFinite(openedAt) ? { openedAt } : {}),
+      });
       continue;
     }
 
@@ -149,6 +166,9 @@ export function calculateWalletPerformance(
 
     let remainingToMatch = quantity;
     let matchedCost = 0n;
+    let holdingWeightedSeconds = 0n;
+    const closedAtMs = trade.timestampIsEstimated === true ? Number.NaN : Date.parse(trade.observedAt);
+    let holdingDurationComplete = Number.isFinite(closedAtMs);
     for (const lot of group.lots) {
       if (remainingToMatch === 0n) break;
       if (lot.quantity === 0n) continue;
@@ -158,6 +178,12 @@ export function calculateWalletPerformance(
         ? lot.cost
         : (lot.cost * consumed) / lot.quantity;
 
+      if (lot.openedAt === undefined || !Number.isFinite(closedAtMs)) {
+        holdingDurationComplete = false;
+      } else {
+        const durationSeconds = Math.max(0, Math.floor((closedAtMs - lot.openedAt) / 1000));
+        holdingWeightedSeconds += BigInt(durationSeconds) * consumed;
+      }
       lot.quantity -= consumed;
       lot.cost -= cost;
       remainingToMatch -= consumed;
@@ -171,6 +197,13 @@ export function calculateWalletPerformance(
 
     if (matchedQuantity > 0n) {
       const matchedPnl = matchedProceeds - matchedCost;
+      group.closedTrades.push({
+        pnlRaw: matchedPnl.toString(),
+        ...(Number.isFinite(closedAtMs) ? { closedAt: new Date(closedAtMs).toISOString() } : {}),
+        ...(holdingDurationComplete
+          ? { holdingDurationSeconds: Number(holdingWeightedSeconds / matchedQuantity) }
+          : {}),
+      });
       group.matchedSellCount++;
       group.matchedSoldToken += matchedQuantity;
       group.realizedPnl += matchedPnl;
@@ -219,6 +252,7 @@ export function calculateWalletPerformance(
       dailyRealizedPnlRaw: Object.fromEntries(
         [...group.dailyRealizedPnl.entries()].map(([day, pnl]) => [day, pnl.toString()]),
       ),
+      closedTrades: group.closedTrades,
       pnlIsGross: true,
     };
   });

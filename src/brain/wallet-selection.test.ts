@@ -31,6 +31,12 @@ function ranking(
     losingDays: 0,
     positiveDayRatePercent: 100,
     openPositionCount: 0,
+    closedTradeCount14d: 10,
+    realizedPnl14dRaw: "100",
+    medianTradePnlRaw: "10",
+    medianHoldingSeconds: 300,
+    maxProfitConcentrationPercent: 25,
+    maxDrawdownRaw: "20",
     pnlIsGross: true,
   };
 }

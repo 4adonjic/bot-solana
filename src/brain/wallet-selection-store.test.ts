@@ -14,7 +14,13 @@ function ranking(wallet: string, score: number): WalletRanking {
     realizedPnlRaw: "100", grossProfitRaw: "120", grossLossRaw: "20",
     profitFactor: "6.00", matchedMintCount: 3, activeDays: 3,
     profitableDays: 3, losingDays: 0, positiveDayRatePercent: 100,
-    openPositionCount: 0, pnlIsGross: true,
+    openPositionCount: 0,
+    closedTradeCount14d: 10,
+    realizedPnl14dRaw: "100",
+    medianTradePnlRaw: "10",
+    medianHoldingSeconds: 300,
+    maxProfitConcentrationPercent: 25,
+    maxDrawdownRaw: "20", pnlIsGross: true,
   };
 }
 

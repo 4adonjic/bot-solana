@@ -3,6 +3,8 @@ import type { WalletPerformance } from "./wallet-performance.js";
 export interface WalletRankingOptions {
   minMatchedSells?: number;
   minActiveDays?: number;
+  rollingWindowDays?: number;
+  now?: Date;
 }
 
 export interface WalletRanking {
@@ -28,6 +30,16 @@ export interface WalletRanking {
   losingDays: number;
   positiveDayRatePercent: number;
   openPositionCount: number;
+  /** Matched sells with reliable timestamps in the rolling window. */
+  closedTradeCount14d: number;
+  realizedPnl14dRaw: string;
+  /** Median realized PnL per matched sell, in the quote asset's raw units. */
+  medianTradePnlRaw: string | null;
+  medianHoldingSeconds: number | null;
+  /** Largest single positive matched sell as a share of all positive matched sells. */
+  maxProfitConcentrationPercent: number;
+  /** Largest peak-to-trough decline in cumulative daily realized PnL, raw quote units. */
+  maxDrawdownRaw: string;
   pnlIsGross: true;
 }
 
@@ -44,6 +56,7 @@ interface MutableRanking {
   mints: Set<string>;
   dailyPnl: Map<string, bigint>;
   openMints: Set<string>;
+  closedTrades: Array<{ pnl: bigint; closedAt?: string; holdingDurationSeconds?: number }>;
 }
 
 /**
@@ -57,6 +70,12 @@ export function rankWallets(
 ): WalletRanking[] {
   const minMatchedSells = options.minMatchedSells ?? 10;
   const minActiveDays = options.minActiveDays ?? 3;
+  const rollingWindowDays = options.rollingWindowDays ?? 14;
+  const nowMs = (options.now ?? new Date()).getTime();
+  if (!Number.isFinite(nowMs)) throw new Error("now must be a valid date");
+  if (!Number.isSafeInteger(rollingWindowDays) || rollingWindowDays < 1) {
+    throw new Error("rollingWindowDays must be a positive safe integer");
+  }
   if (!Number.isSafeInteger(minMatchedSells) || minMatchedSells < 1) {
     throw new Error("minMatchedSells must be a positive safe integer");
   }
@@ -82,6 +101,7 @@ export function rankWallets(
         mints: new Set(),
         dailyPnl: new Map(),
         openMints: new Set(),
+        closedTrades: [],
       };
       groups.set(key, group);
     }
@@ -94,6 +114,15 @@ export function rankWallets(
     group.grossLoss += BigInt(performance.grossLossRaw);
     if (performance.matchedSellCount > 0) group.mints.add(performance.mint);
     if (BigInt(performance.openTokenRaw) > 0n) group.openMints.add(performance.mint);
+    for (const closedTrade of performance.closedTrades ?? []) {
+      group.closedTrades.push({
+        pnl: BigInt(closedTrade.pnlRaw),
+        ...(closedTrade.closedAt ? { closedAt: closedTrade.closedAt } : {}),
+        ...(closedTrade.holdingDurationSeconds === undefined
+          ? {}
+          : { holdingDurationSeconds: closedTrade.holdingDurationSeconds }),
+      });
+    }
 
     for (const [day, rawPnl] of Object.entries(performance.dailyRealizedPnlRaw)) {
       group.dailyPnl.set(day, (group.dailyPnl.get(day) ?? 0n) + BigInt(rawPnl));
@@ -121,6 +150,39 @@ export function rankWallets(
         : group.realizedPnl < 0n
           ? "negative_history" as const
           : "breakeven" as const;
+
+    const rollingStartMs = nowMs - rollingWindowDays * 24 * 60 * 60 * 1000;
+    const recentClosedTrades = group.closedTrades.filter((trade) => {
+      if (!trade.closedAt) return false;
+      const closedAt = Date.parse(trade.closedAt);
+      return Number.isFinite(closedAt) && closedAt >= rollingStartMs && closedAt <= nowMs;
+    });
+    const sortedPnls = group.closedTrades.map((trade) => trade.pnl).sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    const medianPnl = sortedPnls.length === 0 ? null : sortedPnls.length % 2 === 1
+      ? sortedPnls[(sortedPnls.length - 1) / 2]!
+      : (sortedPnls[sortedPnls.length / 2 - 1]! + sortedPnls[sortedPnls.length / 2]!) / 2n;
+    const holdingDurations = group.closedTrades
+      .map((trade) => trade.holdingDurationSeconds)
+      .filter((value): value is number => value !== undefined && Number.isFinite(value) && value >= 0)
+      .sort((a, b) => a - b);
+    const medianHoldingSeconds = holdingDurations.length === 0 ? null : holdingDurations.length % 2 === 1
+      ? holdingDurations[(holdingDurations.length - 1) / 2]!
+      : Math.round((holdingDurations[holdingDurations.length / 2 - 1]! + holdingDurations[holdingDurations.length / 2]!) / 2);
+    const totalPositiveProfit = group.closedTrades.reduce((sum, trade) => sum + (trade.pnl > 0n ? trade.pnl : 0n), 0n);
+    const largestPositiveProfit = group.closedTrades.reduce((largest, trade) => trade.pnl > largest ? trade.pnl : largest, 0n);
+    const maxProfitConcentrationPercent = totalPositiveProfit === 0n
+      ? 0
+      : Number((largestPositiveProfit * 10_000n) / totalPositiveProfit) / 100;
+    let cumulativeDailyPnl = 0n;
+    let peakDailyPnl = 0n;
+    let maxDrawdown = 0n;
+    for (const [, dailyPnl] of [...group.dailyPnl.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      cumulativeDailyPnl += dailyPnl;
+      if (cumulativeDailyPnl > peakDailyPnl) peakDailyPnl = cumulativeDailyPnl;
+      const drawdown = peakDailyPnl - cumulativeDailyPnl;
+      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+    }
+    const realizedPnl14d = recentClosedTrades.reduce((sum, trade) => sum + trade.pnl, 0n);
 
     return {
       wallet: group.wallet,
@@ -152,6 +214,12 @@ export function rankWallets(
       losingDays,
       positiveDayRatePercent,
       openPositionCount: group.openMints.size,
+      closedTradeCount14d: recentClosedTrades.length,
+      realizedPnl14dRaw: realizedPnl14d.toString(),
+      medianTradePnlRaw: medianPnl?.toString() ?? null,
+      medianHoldingSeconds,
+      maxProfitConcentrationPercent,
+      maxDrawdownRaw: maxDrawdown.toString(),
       pnlIsGross: true as const,
     };
   });
