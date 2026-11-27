@@ -108,7 +108,13 @@ export class WalletHistoryBackfill {
             if (trade.wallet !== wallet || trade.timestamp === undefined || !trade.quoteAmountRaw ||
               trade.quoteSource !== "token_balance" || trade.quoteAmountIsEstimate !== false ||
               !trade.quoteMint || trade.quoteDecimals === undefined) continue;
-            const observedAt = new Date(trade.timestamp * 1000).toISOString();
+            // ParsedTrade.timestamp is already expressed in milliseconds (the decoder
+            // converts Solana blockTime seconds at the parsing boundary).
+            // Multiplying again shifts dates tens of thousands of years forward.
+            const observedAt = new Date(trade.timestamp).toISOString();
+            const observedAtMs = Date.parse(observedAt);
+            if (!Number.isFinite(observedAtMs) || observedAtMs < Date.UTC(2009, 0, 1) ||
+              observedAtMs > Date.now() + 5 * 60 * 1000) continue;
             const stored = await this.options.trades.record({
               wallet: trade.wallet,
               signature: trade.signature,
