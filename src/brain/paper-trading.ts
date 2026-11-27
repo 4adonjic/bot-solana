@@ -234,7 +234,7 @@ export class PaperTradingEngine {
       const utcDay = tradeDate.toISOString().slice(0, 10);
       const dailyRealizedPnl = this.state.fills
         .filter((fill) => fill.quoteMint === trade.quoteMint && fill.observedAt.slice(0, 10) === utcDay)
-        .reduce((total, fill) => total + (fill.realizedPnlRaw && /^-?\\d+$/.test(fill.realizedPnlRaw) ? BigInt(fill.realizedPnlRaw) : 0n), 0n);
+        .reduce((total, fill) => total + (fill.realizedPnlRaw && /^-?\d+$/.test(fill.realizedPnlRaw) ? BigInt(fill.realizedPnlRaw) : 0n), 0n);
       const dailyLossLimit = (BigInt(asset.initialBalanceRaw) * BigInt(this.maxDailyLossPercent)) / 100n;
       if (dailyRealizedPnl <= -dailyLossLimit) {
         return { executed: false, reason: "daily_loss_limit_reached" };
@@ -437,7 +437,7 @@ export class PaperTradingEngine {
       typeof fill.quoteAmountRaw === "string" && /^\d+$/.test(fill.quoteAmountRaw) &&
       typeof fill.feeQuoteRaw === "string" && /^\d+$/.test(fill.feeQuoteRaw) &&
       Number.isInteger(fill.slippageBps) && typeof fill.observedAt === "string" &&
-      (fill.realizedPnlRaw === undefined || (typeof fill.realizedPnlRaw === "string" && /^-?\\d+$/.test(fill.realizedPnlRaw))),
+      (fill.realizedPnlRaw === undefined || (typeof fill.realizedPnlRaw === "string" && /^-?\d+$/.test(fill.realizedPnlRaw))),
     );
   }
 
