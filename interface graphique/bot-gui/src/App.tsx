@@ -134,6 +134,18 @@ export default function App() {
                 <Metric label="Slippage moyen simulé" value={stats.averageSlippageBps === null ? "—" : (stats.averageSlippageBps / 100).toFixed(2) + " %"} note={stats.slippageSamples + " fills mesurés"} />
               </div>
             </Panel>)}
+            <Panel title="Performance par wallet copié"><p className="muted">Résultats réalisés de chaque wallet, regroupés par actif de cotation. Le P&L inclut les frais simulés.</p>
+              {snapshot.paper.walletPerformance.length ? <DataTable headers={["WALLET", "QUOTE", "P&L RÉALISÉ NET", "FRAIS", "ACHATS", "VENTES", "TAUX DE RÉUSSITE", "SLIPPAGE MOYEN"]}>
+                {snapshot.paper.walletPerformance.map(w => <tr key={w.wallet + w.quoteMint}>
+                  <td className="mono">{short(w.wallet)}</td><td>{asset(w.quoteMint)}</td>
+                  <td className={BigInt(w.realizedPnlRaw) >= 0n ? "source-ok" : "source-missing"}>{signedMoney(w.realizedPnlRaw, decimals(w.quoteMint))} {asset(w.quoteMint)}</td>
+                  <td>{money(w.totalFeesRaw, decimals(w.quoteMint))} {asset(w.quoteMint)}</td>
+                  <td>{w.buys}</td><td>{w.sells}</td>
+                  <td>{w.closedTrades ? (w.wins / w.closedTrades * 100).toFixed(1) + " %" : "—"}</td>
+                  <td>{w.averageSlippageBps === null ? "—" : (w.averageSlippageBps / 100).toFixed(2) + " %"}</td>
+                </tr>)}
+              </DataTable> : <Empty>Aucun wallet n’a encore de fill simulé.</Empty>}
+            </Panel>
             <Panel title="Soldes virtuels"><div className="balance-grid">{Object.entries(snapshot.paper.balances).map(([mint, raw]) => <div className="balance-card" key={mint}><span>{asset(mint)}</span><strong>{money(raw, decimals(mint))}</strong><small>Solde disponible</small></div>)}</div></Panel>
             <Panel title="Positions ouvertes"><DataTable headers={["WALLET", "TOKEN", "QUANTITÉ BRUTE", "COÛT DE REVIENT"]}>
               {snapshot.paper.positions.map((p, i) => <tr key={p.wallet + p.mint + i}><td className="mono">{short(p.wallet)}</td><td className="mono">{short(p.mint)}</td><td>{p.tokenAmountRaw}</td><td>{money(p.costBasisRaw, decimals(p.quoteMint))} {asset(p.quoteMint)}</td></tr>)}
