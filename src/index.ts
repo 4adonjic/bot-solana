@@ -115,6 +115,7 @@ async function main(): Promise<void> {
           copyDelayMs: 3_000,
           minSlippageBps: 200,
           maxSlippageBps: 500,
+          maxPriceImpactPercent: 5,
           feeBps: 10,
         })
       : null;
@@ -131,6 +132,8 @@ async function main(): Promise<void> {
           fixedBuySizes: { SOL: "0.05", USDC: "5" },
           copyDelayMs: 3_000,
           slippageRangeBps: [200, 500],
+          maxPriceImpactPercent: 5,
+          minimumLiquidityUsd: 20_000,
           feeBps: 10,
           marketQuotes: "Jupiter Swap API v2 (read-only)",
           stateFile: "data/paper-trading.json",
@@ -295,10 +298,22 @@ async function main(): Promise<void> {
               );
             } else {
               const security = await analyzeCachedSecurity(candidate.mint);
-              if (security.assessment.decision !== "allow") {
+              if (
+                security.assessment.decision !== "allow" ||
+                typeof security.snapshot.liquidityUsd !== "number" ||
+                security.snapshot.liquidityUsd < 20_000
+              ) {
                 logger.info(
-                  { wallet: candidate.wallet, mint: candidate.mint, decision: security.assessment.decision, riskScore: security.assessment.riskScore, missingChecks: security.assessment.missingChecks },
-                  "Paper Trading ignoré : sécurité du token non validée",
+                  {
+                    wallet: candidate.wallet,
+                    mint: candidate.mint,
+                    decision: security.assessment.decision,
+                    riskScore: security.assessment.riskScore,
+                    liquidityUsd: security.snapshot.liquidityUsd,
+                    minimumLiquidityUsd: 20_000,
+                    missingChecks: security.assessment.missingChecks,
+                  },
+                  "Paper Trading ignoré : sécurité ou liquidité minimale non validée",
                 );
               } else {
                 const paperResult = await paperEngine.processTrade({

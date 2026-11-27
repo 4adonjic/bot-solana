@@ -12,7 +12,7 @@ export interface PaperQuoteAsset {
   buySizeRaw: string;
 }
 
-export type PaperQuoteProvider = (inputMint: string, outputMint: string, amountRaw: string) => Promise<{ outAmountRaw: string } | null>;
+export type PaperQuoteProvider = (inputMint: string, outputMint: string, amountRaw: string) => Promise<{ outAmountRaw: string; priceImpactPct?: string } | null>;
 
 export interface PaperTradingOptions {
   filePath?: string;
@@ -20,6 +20,7 @@ export interface PaperTradingOptions {
   slippageBps?: number;
   minSlippageBps?: number;
   maxSlippageBps?: number;
+  maxPriceImpactPercent?: number;
   copyDelayMs?: number;
   quoteProvider?: PaperQuoteProvider;
   feeBps?: number;
@@ -77,6 +78,7 @@ export class PaperTradingEngine {
   private readonly slippageBps: number;
   private readonly minSlippageBps: number;
   private readonly maxSlippageBps: number;
+  private readonly maxPriceImpactPercent: number;
   private readonly copyDelayMs: number;
   private readonly quoteProvider: PaperQuoteProvider | undefined;
   private readonly feeBps: number;
@@ -92,6 +94,7 @@ export class PaperTradingEngine {
     this.slippageBps = options.slippageBps ?? 50;
     this.minSlippageBps = options.minSlippageBps ?? this.slippageBps;
     this.maxSlippageBps = options.maxSlippageBps ?? this.slippageBps;
+    this.maxPriceImpactPercent = options.maxPriceImpactPercent ?? 5;
     this.copyDelayMs = options.copyDelayMs ?? (options.quoteProvider ? 3_000 : 0);
     this.quoteProvider = options.quoteProvider;
     this.feeBps = options.feeBps ?? 10;
@@ -119,6 +122,9 @@ export class PaperTradingEngine {
         !Number.isInteger(this.maxSlippageBps) || this.maxSlippageBps < this.minSlippageBps ||
         this.maxSlippageBps >= 10_000) {
       throw new Error("slippage range must be valid and below 10000 bps");
+    }
+    if (!Number.isFinite(this.maxPriceImpactPercent) || this.maxPriceImpactPercent < 0 || this.maxPriceImpactPercent > 100) {
+      throw new Error("maxPriceImpactPercent must be between 0 and 100");
     }
     if (!Number.isSafeInteger(this.copyDelayMs) || this.copyDelayMs < 0 || this.copyDelayMs > 60_000) {
       throw new Error("copyDelayMs must be between 0 and 60000");
@@ -238,6 +244,13 @@ export class PaperTradingEngine {
         if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
           return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
         }
+        const priceImpactPercent = this.parsePriceImpactPercent(quote.priceImpactPct);
+        if (priceImpactPercent === null) {
+          return { executed: false, reason: "missing_or_invalid_price_impact" };
+        }
+        if (priceImpactPercent > this.maxPriceImpactPercent) {
+          return { executed: false, reason: "price_impact_above_limit" };
+        }
         tokenAmount = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
       } else {
         tokenAmount = (marketSpend * sourceTokens * BigInt(10_000 - slippageBps)) / (sourceQuote * 10_000n);
@@ -280,6 +293,13 @@ export class PaperTradingEngine {
         const quote = await this.quoteProvider(trade.mint, asset.mint, tokenAmount.toString());
         if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
           return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
+        }
+        const priceImpactPercent = this.parsePriceImpactPercent(quote.priceImpactPct);
+        if (priceImpactPercent === null) {
+          return { executed: false, reason: "missing_or_invalid_price_impact" };
+        }
+        if (priceImpactPercent > this.maxPriceImpactPercent) {
+          return { executed: false, reason: "price_impact_above_limit" };
         }
         grossProceeds = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
       } else {
@@ -334,6 +354,14 @@ export class PaperTradingEngine {
       balanceRaw: balances[asset.mint] ?? "0",
       position: nextPosition,
     };
+  }
+
+  /** Jupiter reports priceImpactPct as a decimal fraction: 0.05 means 5%. */
+  private parsePriceImpactPercent(value: string | undefined): number | null {
+    if (value === undefined || value.trim() === "") return null;
+    const fraction = Number(value);
+    if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) return null;
+    return fraction * 100;
   }
 
   private chooseSlippage(signature: string): number {

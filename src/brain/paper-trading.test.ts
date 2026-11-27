@@ -216,7 +216,7 @@ test("uses a fresh quote after the configured delay and fails closed when unavai
       feeBps: 100,
       quoteProvider: async (inputMint, outputMint, amountRaw) => {
         quoteCalls.push([inputMint, outputMint, amountRaw]);
-        return { outAmountRaw: "2000" };
+        return { outAmountRaw: "2000", priceImpactPct: "0.01" };
       },
     });
     await engine.init();
@@ -243,6 +243,37 @@ test("uses a fresh quote after the configured delay and fails closed when unavai
     const rejected = await unavailable.processTrade(sourceTrade("buy", "missing-fresh-quote"));
     assert.deepEqual(rejected, { executed: false, reason: "fresh_jupiter_quote_unavailable" });
     assert.equal(unavailable.snapshot().fills.length, 0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("rejects paper fills when Jupiter price impact is missing or above the configured limit", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "solana-paper-impact-"));
+  try {
+    const highImpact = new PaperTradingEngine({
+      filePath: join(directory, "high-impact.json"),
+      quoteAssets: [asset],
+      copyDelayMs: 0,
+      maxPriceImpactPercent: 5,
+      quoteProvider: async () => ({ outAmountRaw: "2000", priceImpactPct: "0.051" }),
+    });
+    await highImpact.init();
+    const rejectedHigh = await highImpact.processTrade(sourceTrade("buy", "high-impact"));
+    assert.deepEqual(rejectedHigh, { executed: false, reason: "price_impact_above_limit" });
+    assert.equal(highImpact.snapshot().fills.length, 0);
+
+    const missingImpact = new PaperTradingEngine({
+      filePath: join(directory, "missing-impact.json"),
+      quoteAssets: [asset],
+      copyDelayMs: 0,
+      quoteProvider: async () => ({ outAmountRaw: "2000" }),
+    });
+    await missingImpact.init();
+    const rejectedMissing = await missingImpact.processTrade(sourceTrade("buy", "missing-impact"));
+    assert.deepEqual(rejectedMissing, { executed: false, reason: "missing_or_invalid_price_impact" });
+    assert.equal(missingImpact.snapshot().fills.length, 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
