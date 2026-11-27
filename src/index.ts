@@ -116,6 +116,7 @@ async function main(): Promise<void> {
           minSlippageBps: 200,
           maxSlippageBps: 500,
           maxPriceImpactPercent: 5,
+          maxPositionPercent: 20,
           feeBps: 10,
         })
       : null;
@@ -133,6 +134,7 @@ async function main(): Promise<void> {
           copyDelayMs: 3_000,
           slippageRangeBps: [200, 500],
           maxPriceImpactPercent: 5,
+          maxPositionPercent: 20,
           minimumLiquidityUsd: 20_000,
           feeBps: 10,
           marketQuotes: "Jupiter Swap API v2 (read-only)",

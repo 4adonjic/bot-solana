@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   PaperTradingEngine,
   type PaperQuoteAsset,
+  type PaperTradingOptions,
 } from "./paper-trading.js";
 import type { PerformanceTrade } from "./wallet-performance.js";
 
@@ -40,6 +41,7 @@ function sourceTrade(
 
 async function withEngine(
   run: (engine: PaperTradingEngine, filePath: string) => Promise<void>,
+  options: Pick<PaperTradingOptions, "maxPositionPercent"> = {},
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), "solana-paper-"));
   const filePath = join(directory, "paper.json");
@@ -49,6 +51,7 @@ async function withEngine(
       quoteAssets: [asset],
       slippageBps: 100,
       feeBps: 100,
+      ...options,
     });
     await engine.init();
     await run(engine, filePath);
@@ -186,10 +189,10 @@ test("serializes concurrent paper fills and respects the virtual balance", async
       engine.processTrade(sourceTrade("buy", "parallel-11")),
     ]);
     assert.equal(results.filter((result) => result.executed).length, 10);
-    assert.equal(results.filter((result) => !result.executed && result.reason === "insufficient_virtual_balance").length, 1);
+    assert.equal(results.filter((result) => !result.executed && (result.reason === "insufficient_virtual_balance" || result.reason === "position_exposure_limit_reached")).length, 1);
     assert.equal(engine.snapshot().balances[quoteMint], "0");
     assert.equal(engine.snapshot().fills.length, 10);
-  });
+  }, { maxPositionPercent: 100 });
 });
 
 test("loads initial virtual balances only once and rejects corrupted state", async () => {
@@ -277,4 +280,33 @@ test("rejects paper fills when Jupiter price impact is missing or above the conf
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+
+test("caps each token position at 20% of its initial quote balance and releases capacity after sells", async () => {
+  await withEngine(async (engine) => {
+    const first = await engine.processTrade(sourceTrade("buy", "cap-buy-1"));
+    const second = await engine.processTrade(sourceTrade("buy", "cap-buy-2"));
+    assert.equal(first.executed, true);
+    assert.equal(second.executed, true);
+    if (!second.executed) return;
+    assert.equal(second.position?.costBasisRaw, "2000");
+
+    const blocked = await engine.processTrade(sourceTrade("buy", "cap-buy-3"));
+    assert.deepEqual(blocked, { executed: false, reason: "position_exposure_limit_reached" });
+    assert.equal(engine.snapshot().fills.length, 2);
+
+    const partialSell = await engine.processTrade(sourceTrade("sell", "cap-partial-sell", {
+      tokenAmountRaw: "50",
+      tokenBalanceBeforeRaw: "100",
+      tokenBalanceAfterRaw: "50",
+    }));
+    assert.equal(partialSell.executed, true);
+    if (!partialSell.executed) return;
+    assert.equal(partialSell.position?.costBasisRaw, "1000");
+
+    const allowedAgain = await engine.processTrade(sourceTrade("buy", "cap-buy-4"));
+    assert.equal(allowedAgain.executed, true);
+    if (allowedAgain.executed) assert.equal(allowedAgain.position?.costBasisRaw, "2000");
+  });
 });
