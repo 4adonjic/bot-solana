@@ -147,36 +147,45 @@ async function main(): Promise<void> {
         "PAPER TRADING ACTIF : portefeuille fictif uniquement, aucune transaction blockchain ne sera envoyée",
       );
     }
-    const refreshWalletRanking = async (): Promise<void> => {
-      const performance = calculateWalletPerformance(tradeStore.list());
-      const rankings = rankWallets(performance);
-      // Persist every evaluated wallet, including provisional/ineligible rankings,
-      // so the desktop dashboard can explain why a candidate is not selected.
-      await mkdir("data", { recursive: true });
-      const rankingPath = "data/wallet-rankings.json";
-      const rankingTempPath = rankingPath + ".tmp";
-      await writeFile(rankingTempPath, JSON.stringify({
-        version: 1,
-        generatedAt: new Date().toISOString(),
-        wallets: rankings,
-      }, null, 2), "utf8");
-      await rename(rankingTempPath, rankingPath);
-      const eligible = rankings.filter((item) => item.eligible);
-      const selected = selectWalletsForPaperTrading(rankings);
-      const persistentWatchlist = await selectionStore.sync(rankings, selected);
-      selectedWalletKeys = new Set(persistentWatchlist.filter((item) => item.active)
-        .map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
-      logger.info(
-        {
-          historicalTradesLoaded: tradeStore.count(),
-          performanceGroupsLoaded: performance.length,
-          walletsWithEnoughData: eligible.length,
-          topWallets: eligible.slice(0, 10),
-          selectedForPaperTrading: persistentWatchlist.filter((item) => item.active),
-          persistentWatchlist,
-        },
-        "Classement des wallets et sélection automatique Paper Trading (score minimum 65, maximum 10)",
-      );
+    // Serialize refreshes: backfill, live discovery and the periodic monitor
+    // can all request a ranking update at nearly the same time.
+    let rankingRefreshQueue: Promise<void> = Promise.resolve();
+    const refreshWalletRanking = (): Promise<void> => {
+      const refresh = rankingRefreshQueue.then(async (): Promise<void> => {
+    const performance = calculateWalletPerformance(tradeStore.list());
+    const rankings = rankWallets(performance);
+    // Persist every evaluated wallet, including provisional/ineligible rankings,
+    // so the desktop dashboard can explain why a candidate is not selected.
+    await mkdir("data", { recursive: true });
+    const rankingPath = "data/wallet-rankings.json";
+    const rankingTempPath = rankingPath + ".tmp";
+    await writeFile(rankingTempPath, JSON.stringify({
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      wallets: rankings,
+    }, null, 2), "utf8");
+    await rename(rankingTempPath, rankingPath);
+    const eligible = rankings.filter((item) => item.eligible);
+    const selected = selectWalletsForPaperTrading(rankings);
+    const persistentWatchlist = await selectionStore.sync(rankings, selected);
+    selectedWalletKeys = new Set(persistentWatchlist.filter((item) => item.active)
+      .map((item) => walletSelectionKey(item.wallet, item.quoteMint)));
+    logger.info(
+      {
+        historicalTradesLoaded: tradeStore.count(),
+        performanceGroupsLoaded: performance.length,
+        walletsWithEnoughData: eligible.length,
+        topWallets: eligible.slice(0, 10),
+        selectedForPaperTrading: persistentWatchlist.filter((item) => item.active),
+        persistentWatchlist,
+      },
+      "Classement des wallets et sélection automatique Paper Trading (score minimum 65, maximum 10)",
+    );
+      });
+      rankingRefreshQueue = refresh.catch((error: unknown) => {
+        logger.error({ error }, "Échec du recalcul périodique du classement des wallets");
+      });
+      return refresh;
     };
     logger.info(
       { candidateWalletsLoaded: candidateStore.list().length, historicalTradesLoaded: tradeStore.count() },
@@ -197,6 +206,17 @@ async function main(): Promise<void> {
     void runHistoryBackfill();
     const historyBackfillInterval = setInterval(() => void runHistoryBackfill(), 15_000);
     historyBackfillInterval.unref();
+
+    // Reassess the full rolling 14-day window even during quiet periods.
+    // This lets wallets expire out of eligibility and updates the watchlist
+    // without waiting for another 100 newly discovered trades.
+    const WALLET_REASSESSMENT_INTERVAL_MS = 5 * 60_000;
+    const walletReassessmentInterval = setInterval(() => {
+      void refreshWalletRanking().catch((error: unknown) => {
+        logger.error({ error }, "Échec de la réévaluation périodique des wallets");
+      });
+    }, WALLET_REASSESSMENT_INTERVAL_MS);
+    walletReassessmentInterval.unref();
     let newTradesSinceRanking = 0;
     const rankingRefreshInterval = 100;
     // Keep discovery below the shared Helius HTTP RPC budget. DEX logs can
