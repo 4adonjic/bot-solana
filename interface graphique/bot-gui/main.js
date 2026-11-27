@@ -4,9 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadDashboardSnapshot } = require('./dashboard-data.cjs');
 
-const projectRoot = process.env.BOT_PROJECT_ROOT || path.resolve(__dirname, '..', '..');
-const dataDirectory = process.env.BOT_DATA_DIR || path.join(projectRoot, 'data');
+const packagedBackendRoot = path.join(process.resourcesPath, 'backend');
+const projectRoot = process.env.BOT_PROJECT_ROOT || (app.isPackaged
+  ? packagedBackendRoot
+  : path.resolve(__dirname, '..', '..'));
+const runtimeDataDirectory = app.isPackaged ? app.getPath('userData') : projectRoot;
+const dataDirectory = process.env.BOT_DATA_DIR || path.join(runtimeDataDirectory, 'data');
 const backendEntry = path.join(projectRoot, 'dist', 'index.js');
+const backendWorkingDirectory = runtimeDataDirectory;
+const backendEnvFile = path.join(backendWorkingDirectory, '.env');
 const windows = new Set();
 const MAX_LOG_LINES = 300;
 let botProcess = null;
@@ -37,15 +43,22 @@ function appendLog(source, chunk) {
 function startBot() {
   if (botProcess && botStatus.state !== 'stopped') return botStatus;
   if (!fs.existsSync(backendEntry)) {
-    throw new Error('Moteur non compilé. Depuis le dossier du bot, exécute npm.cmd run build.');
+    throw new Error('Moteur introuvable. Réinstallez l’application ou reconstruisez le paquet Windows.');
+  }
+  if (app.isPackaged && !fs.existsSync(backendEnvFile)) {
+    throw new Error('Configuration absente. Le fichier .env doit être placé dans le dossier de données de Solana Bot.');
   }
 
   botLogs = [];
   setBotStatus({ state: 'starting', pid: null, startedAt: null, exitCode: null, message: 'Démarrage du moteur…' });
   const child = spawn(process.execPath, [backendEntry], {
-    cwd: projectRoot,
+    cwd: backendWorkingDirectory,
     windowsHide: true,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      DOTENV_CONFIG_PATH: backendEnvFile,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   botProcess = child;
