@@ -189,3 +189,33 @@ test("strict wallet discovery rejects quote movements in the wrong direction", (
   ), { requireQuoteEvidence: true });
   assert.equal(trades.length, 0);
 });
+
+
+test("requests support for versioned Solana transaction version 1", async () => {
+  // Import after setting valid dummy RPC URLs: importing the decoder loads the
+  // application config, but this unit test uses a mocked Connection only.
+  process.env.RPC_HTTP_URL ??= "https://example.invalid";
+  process.env.RPC_WS_URL ??= "wss://example.invalid";
+  process.env.ENABLE_DEX_DISCOVERY ??= "true";
+  const { TransactionDecoder } = await import("./decoder.js");
+
+  const requestOptions: Array<{ maxSupportedTransactionVersion?: number }> = [];
+  const connection = {
+    getTransaction: async (
+      _signature: string,
+      options: { maxSupportedTransactionVersion?: number },
+    ) => {
+      requestOptions.push(options);
+      return null;
+    },
+  };
+  const decoder = new TransactionDecoder({ connection: connection as never, targetWallets: [] });
+
+  await decoder.decode("test-signature");
+  await decoder.decodeWalletCandidates("test-signature");
+
+  assert.deepEqual(
+    requestOptions.map((options) => options.maxSupportedTransactionVersion),
+    [1, 1],
+  );
+});
