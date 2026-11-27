@@ -217,7 +217,9 @@ export class PaperTradingEngine {
     }
     const slippageBps = this.chooseSlippage(trade.signature);
     const sourceTokens = BigInt(trade.tokenAmountRaw);
-    const sourceQuote = trade.quoteAmountRaw ? BigInt(trade.quoteAmountRaw) : 0n;
+    const sourceQuote = trade.quoteAmountRaw && /^\\d+$/.test(trade.quoteAmountRaw)
+      ? BigInt(trade.quoteAmountRaw)
+      : 0n;
     const currentBalance = BigInt(balances[asset.mint] ?? "0");
     let tokenAmount: bigint;
     let quoteAmount: bigint;
