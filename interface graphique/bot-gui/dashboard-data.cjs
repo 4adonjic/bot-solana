@@ -16,6 +16,34 @@ async function readJsonLines(file) {
   } catch (error) { if (error && error.code === 'ENOENT') return []; throw error; }
 }
 
+function summarizePaperFills(fills) {
+  const summaries = new Map();
+  for (const fill of fills) {
+    if (!fill || typeof fill.quoteMint !== 'string' || !/^\\d+$/.test(String(fill.feeQuoteRaw ?? ''))) continue;
+    let summary = summaries.get(fill.quoteMint);
+    if (!summary) {
+      summary = { realizedPnlRaw: '0', totalFeesRaw: '0', closedTrades: 0, wins: 0, losses: 0, slippageBpsTotal: 0, slippageSamples: 0 };
+      summaries.set(fill.quoteMint, summary);
+    }
+    summary.totalFeesRaw = (BigInt(summary.totalFeesRaw) + BigInt(fill.feeQuoteRaw)).toString();
+    if (Number.isFinite(fill.slippageBps) && fill.slippageBps >= 0) {
+      summary.slippageBpsTotal += fill.slippageBps;
+      summary.slippageSamples += 1;
+    }
+    if (fill.side === 'sell' && /^-?\\d+$/.test(String(fill.realizedPnlRaw ?? ''))) {
+      const pnl = BigInt(fill.realizedPnlRaw);
+      summary.realizedPnlRaw = (BigInt(summary.realizedPnlRaw) + pnl).toString();
+      summary.closedTrades += 1;
+      if (pnl > 0n) summary.wins += 1;
+      else if (pnl < 0n) summary.losses += 1;
+    }
+  }
+  return Object.fromEntries([...summaries.entries()].map(([mint, summary]) => [mint, {
+    ...summary,
+    averageSlippageBps: summary.slippageSamples ? summary.slippageBpsTotal / summary.slippageSamples : null,
+  }]));
+}
+
 async function loadDashboardSnapshot(directory) {
   const [candidateData, watchlistData, paperData, rankingData, trades] = await Promise.all([
     readJson(path.join(directory, 'wallet-candidates.json'), { version: 1, wallets: {} }),
@@ -43,7 +71,7 @@ async function loadDashboardSnapshot(directory) {
     candidates: candidates.sort((a,b) => String(b.lastSeenAt || '').localeCompare(String(a.lastSeenAt || ''))).slice(0,100),
     watchlist: watchlist.sort((a,b) => Number(b.active)-Number(a.active) || Number(b.reliabilityScore || 0)-Number(a.reliabilityScore || 0)),
     trades: trades.slice(-100).reverse(),
-    paper: paper ? { balances: paper.balances, positions: paper.positions, fills: paper.fills.slice(-100).reverse() } : null,
+    paper: paper ? { balances: paper.balances, positions: paper.positions, performance: summarizePaperFills(paper.fills), fills: paper.fills.slice(-100).reverse() } : null,
   };
 }
 
