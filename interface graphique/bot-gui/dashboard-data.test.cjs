@@ -16,8 +16,8 @@ test('loads the real persistent file formats used by the bot stores', async () =
     } }));
     await fs.writeFile(path.join(dir, 'wallet-trades.jsonl'), JSON.stringify({ wallet: 'walletA', signature: 'sigA', mint: 'mintA', side: 'buy', observedAt: '2026-01-02T00:00:00.000Z' }) + '\n');
     await fs.writeFile(path.join(dir, 'paper-trading.json'), JSON.stringify({ version: 1, balances: {}, positions: [], fills: [
-      { quoteMint: 'USDC', quoteAmountRaw: '100', feeQuoteRaw: '2', slippageBps: 250, side: 'buy' },
-      { quoteMint: 'USDC', quoteAmountRaw: '120', feeQuoteRaw: '3', slippageBps: 300, side: 'sell', realizedPnlRaw: '15' },
+      { wallet: 'walletA', quoteMint: 'USDC', quoteAmountRaw: '100', feeQuoteRaw: '2', slippageBps: 250, side: 'buy' },
+      { wallet: 'walletA', quoteMint: 'USDC', quoteAmountRaw: '120', feeQuoteRaw: '3', slippageBps: 300, side: 'sell', realizedPnlRaw: '15' },
     ] }));
     const snapshot = await loadDashboardSnapshot(dir);
     assert.equal(snapshot.counts.candidates, 1);
