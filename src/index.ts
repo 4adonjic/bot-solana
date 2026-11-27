@@ -1,3 +1,4 @@
+import { mkdir, writeFile, rename } from "node:fs/promises";
 import { Connection } from "@solana/web3.js";
 import { config } from "./config/env.js";
 import { logger } from "./core/logger.js";
@@ -114,6 +115,17 @@ async function main(): Promise<void> {
     const refreshWalletRanking = async (): Promise<void> => {
       const performance = calculateWalletPerformance(tradeStore.list());
       const rankings = rankWallets(performance);
+      // Persist every evaluated wallet, including provisional/ineligible rankings,
+      // so the desktop dashboard can explain why a candidate is not selected.
+      await mkdir("data", { recursive: true });
+      const rankingPath = "data/wallet-rankings.json";
+      const rankingTempPath = rankingPath + ".tmp";
+      await writeFile(rankingTempPath, JSON.stringify({
+        version: 1,
+        generatedAt: new Date().toISOString(),
+        wallets: rankings,
+      }, null, 2), "utf8");
+      await rename(rankingTempPath, rankingPath);
       const eligible = rankings.filter((item) => item.eligible);
       const selected = selectWalletsForPaperTrading(rankings);
       const persistentWatchlist = await selectionStore.sync(rankings, selected);
