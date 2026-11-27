@@ -220,11 +220,11 @@ test("uses a fresh quote after the configured delay and fails closed when unavai
       },
     });
     await engine.init();
-    const result = await engine.processTrade(sourceTrade("buy", "fresh-quote-buy", {
-      quoteAmountRaw: undefined,
-      quoteSource: undefined,
-      quoteAmountIsEstimate: undefined,
-    }));
+    const quoteModeTrade = sourceTrade("buy", "fresh-quote-buy");
+    delete quoteModeTrade.quoteAmountRaw;
+    delete quoteModeTrade.quoteSource;
+    delete quoteModeTrade.quoteAmountIsEstimate;
+    const result = await engine.processTrade(quoteModeTrade);
     assert.equal(result.executed, true);
     assert.deepEqual(quoteCalls, [[quoteMint, "TestTokenMint", "990"]]);
     if (result.executed) {
