@@ -19,7 +19,7 @@ async function readJsonLines(file) {
 function summarizePaperFills(fills) {
   const summaries = new Map();
   for (const fill of fills) {
-    if (!fill || typeof fill.quoteMint !== 'string' || !/^\\d+$/.test(String(fill.feeQuoteRaw ?? ''))) continue;
+    if (!fill || typeof fill.quoteMint !== 'string' || !/^\d+$/.test(String(fill.feeQuoteRaw ?? ''))) continue;
     let summary = summaries.get(fill.quoteMint);
     if (!summary) {
       summary = { realizedPnlRaw: '0', totalFeesRaw: '0', closedTrades: 0, wins: 0, losses: 0, slippageBpsTotal: 0, slippageSamples: 0 };
@@ -30,7 +30,7 @@ function summarizePaperFills(fills) {
       summary.slippageBpsTotal += fill.slippageBps;
       summary.slippageSamples += 1;
     }
-    if (fill.side === 'sell' && /^-?\\d+$/.test(String(fill.realizedPnlRaw ?? ''))) {
+    if (fill.side === 'sell' && /^-?\d+$/.test(String(fill.realizedPnlRaw ?? ''))) {
       const pnl = BigInt(fill.realizedPnlRaw);
       summary.realizedPnlRaw = (BigInt(summary.realizedPnlRaw) + pnl).toString();
       summary.closedTrades += 1;
