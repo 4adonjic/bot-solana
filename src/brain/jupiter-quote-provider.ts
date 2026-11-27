@@ -15,7 +15,7 @@ export interface JupiterQuoteProviderOptions {
  * It never requests a transaction (no taker parameter) and never signs or submits anything.
  */
 export class JupiterQuoteProvider {
-  private readonly apiKey?: string;
+  private readonly apiKey: string | undefined;
   private readonly minimumRequestIntervalMs: number;
   private readonly endpoint: string;
   private nextRequestAt = 0;
