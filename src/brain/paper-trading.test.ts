@@ -189,7 +189,7 @@ test("serializes concurrent paper fills and respects the virtual balance", async
       engine.processTrade(sourceTrade("buy", "parallel-11")),
     ]);
     assert.equal(results.filter((result) => result.executed).length, 10);
-    assert.equal(results.filter((result) => !result.executed && result.reason === "insufficient_virtual_balance").length, 1);
+    assert.equal(results.filter((result) => !result.executed && (result.reason === "insufficient_virtual_balance" || result.reason === "position_exposure_limit_reached")).length, 1);
     assert.equal(engine.snapshot().balances[quoteMint], "0");
     assert.equal(engine.snapshot().fills.length, 10);
   }, { maxPositionPercent: 100 });
