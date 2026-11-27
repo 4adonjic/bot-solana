@@ -57,7 +57,7 @@ export class TransactionDecoder {
     try {
       const tx = await this.connection.getTransaction(signature, {
         commitment: "confirmed",
-        maxSupportedTransactionVersion: 0,
+        maxSupportedTransactionVersion: 1,
       });
 
       if (!tx) {
@@ -86,7 +86,7 @@ export class TransactionDecoder {
     try {
       const tx = await this.connection.getTransaction(signature, {
         commitment: "confirmed",
-        maxSupportedTransactionVersion: 0,
+        maxSupportedTransactionVersion: 1,
       });
 
       if (!tx) return [];
