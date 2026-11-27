@@ -118,7 +118,7 @@ async function main(): Promise<void> {
           maxPriceImpactPercent: 5,
           maxPositionPercent: 20,
           maxPortfolioExposurePercent: 60,
-          maxDailyLossPercent: 5;
+          maxDailyLossPercent: 5,
           feeBps: 10,
         })
       : null;
