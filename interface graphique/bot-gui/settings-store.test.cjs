@@ -52,7 +52,7 @@ test('adds and removes observed wallets without disabling the last discovery sou
   try {
     await saveSettings(envFile, { ...valid, targetWallets: first });
     let settings = await addObservedWallet(envFile, second);
-    assert.deepEqual(settings.targetWallets.split(/\\s+/).filter(Boolean), [first, second]);
+    assert.deepEqual(settings.targetWallets.split(/\s+/).filter(Boolean), [first, second]);
     settings = await removeObservedWallet(envFile, first);
     assert.equal(settings.targetWallets, second);
     await assert.rejects(() => removeObservedWallet(envFile, second), /Active la découverte DEX/);
