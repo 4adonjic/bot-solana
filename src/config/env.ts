@@ -36,6 +36,7 @@ const envSchema = z.object({
     .pipe(z.array(base58PubkeySchema)),
   ENABLE_DEX_DISCOVERY: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   ENABLE_PAPER_TRADING: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  JUPITER_API_KEY: z.string().optional(),
 }).superRefine((value, context) => {
   if (value.ENABLE_PAPER_TRADING && !value.ENABLE_DEX_DISCOVERY) {
     context.addIssue({
@@ -60,6 +61,7 @@ export type AppConfig = Readonly<{
   targetWallets: readonly string[];
   enableDexDiscovery: boolean;
   enablePaperTrading: boolean;
+  jupiterApiKey?: string;
 }>;
 
 function loadConfig(): AppConfig {
@@ -79,6 +81,7 @@ function loadConfig(): AppConfig {
     targetWallets: parsed.data.TARGET_WALLETS,
     enableDexDiscovery: parsed.data.ENABLE_DEX_DISCOVERY,
     enablePaperTrading: parsed.data.ENABLE_PAPER_TRADING,
+    ...(parsed.data.JUPITER_API_KEY ? { jupiterApiKey: parsed.data.JUPITER_API_KEY } : {}),
   };
 }
 
