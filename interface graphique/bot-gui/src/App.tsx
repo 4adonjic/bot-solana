@@ -45,7 +45,7 @@ type PaperFillList = NonNullable<Snapshot["paper"]>["fills"];
 
 function PnlHistoryChart({ fills, mint }: { fills: PaperFillList; mint: string }) {
   const daily = new Map<string, number>();
-  for (const fill of [...fills].filter(f => f.quoteMint === mint && f.side === "sell" && /^-?\\d+$/.test(String(f.realizedPnlRaw ?? ""))).sort((a,b) => a.observedAt.localeCompare(b.observedAt))) {
+  for (const fill of [...fills].filter(f => f.quoteMint === mint && f.side === "sell" && /^-?\d+$/.test(String(f.realizedPnlRaw ?? ""))).sort((a,b) => a.observedAt.localeCompare(b.observedAt))) {
     const timestamp = new Date(fill.observedAt);
     if (!Number.isFinite(timestamp.getTime())) continue;
     const day = timestamp.toLocaleDateString("fr-FR");
@@ -79,7 +79,7 @@ function PnlHistoryChart({ fills, mint }: { fills: PaperFillList; mint: string }
 function ExposureBreakdown({ positions }: { positions: NonNullable<Snapshot["paper"]>["positions"] }) {
   const groups = new Map<string, { mint: string; quoteMint: string; raw: bigint; count: number }>();
   for (const position of positions) {
-    if (!/^\\d+$/.test(position.costBasisRaw)) continue;
+    if (!/^\d+$/.test(position.costBasisRaw)) continue;
     const key = position.quoteMint + ":" + position.mint;
     const item = groups.get(key) ?? { mint: position.mint, quoteMint: position.quoteMint, raw: 0n, count: 0 };
     item.raw += BigInt(position.costBasisRaw); item.count += 1; groups.set(key,item);
