@@ -38,7 +38,7 @@ test("backfill resumes from its saved signature cursor and deduplicates history"
         wallet, signature, mint: "TokenMint", side: "buy", amountIn: 1, amountOut: 0,
         tokenAmountRaw: "100", tokenDecimals: 6, quoteAmountRaw: "50",
         quoteMint: "QuoteMint", quoteDecimals: 6, quoteSource: "token_balance",
-        quoteAmountIsEstimate: false, timestamp: 1_700_000_001,
+        quoteAmountIsEstimate: false, timestamp: 1_700_000_001_000,
       }],
     };
     const options = {
@@ -57,6 +57,8 @@ test("backfill resumes from its saved signature cursor and deduplicates history"
       walletsVisited: 1, signaturesScanned: 2, tradesInserted: 2,
     });
     assert.equal(trades.count(), 2);
+    const persistedTrades = trades.list();
+    assert.equal(persistedTrades[0]?.observedAt, "2023-11-14T22:13:21.000Z");
 
     const restarted = new WalletHistoryBackfill(options);
     await restarted.init();
