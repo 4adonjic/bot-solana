@@ -221,7 +221,7 @@ export default function App() {
           {!snapshot.paper ? <div className="alert">Aucun état Paper Trading trouvé. Active la simulation pour créer le portefeuille virtuel.</div> : <>
             <div className="metrics three"><Metric label="Fills enregistrés" value={snapshot.paper.fills.length} /><Metric label="Positions ouvertes" value={snapshot.paper.positions.length} /><Metric label="Trades observés" value={snapshot.counts.observedTrades} /></div>
             <Panel title="Évolution du P&L réalisé"><p className="muted">Courbe du résultat net cumulé par actif de cotation. Les positions non clôturées ne sont pas valorisées.</p>
-              {Object.keys(snapshot.paper.performance).length ? Object.keys(snapshot.paper.performance).map(mint => <div className="chart-asset" key={mint}><h3>{asset(mint)}</h3><PnlHistoryChart fills={snapshot.paper!.fills} mint={mint} /></div>) : <EmptyLes graphiques apparaîtront après les premières ventes clôturées.</Empty>}
+              {Object.keys(snapshot.paper.performance).length ? Object.keys(snapshot.paper.performance).map(mint => <div className="chart-asset" key={mint}><h3>{asset(mint)}</h3><PnlHistoryChart fills={snapshot.paper!.fills} mint={mint} /></div>) : <Empty>Les graphiques apparaîtront après les premières ventes clôturées.</Empty>}
             </Panel>
             <Panel title="Répartition de l’exposition"><p className="muted">Coût de revient des positions encore ouvertes, regroupé par token et actif de cotation. Les barres sont comparées au plus gros poste de chaque actif.</p><ExposureBreakdown positions={snapshot.paper.positions} /></Panel>
             {Object.entries(snapshot.paper.performance).map(([mint, stats]) => <Panel key={mint} title={`Performance cumulée · ${asset(mint)}`}>
