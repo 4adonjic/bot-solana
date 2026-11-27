@@ -61,7 +61,7 @@ export default function ManualWallets() {
     </form>
     <p className="muted manual-wallet-help">{mode === "observe"
       ? "Surveille les transactions de cette adresse et analyse les tokens détectés. Un redémarrage du bot est nécessaire."
-      : "Force la sélection de ce wallet pour les simulations issues du flux DEX. Ne contourne jamais les contrôles de sécurité des tokens, la liquidité minimale ou les limites du portefeuille papier."}</p>
+      : "Force la sélection de ce wallet pour les simulations issues du flux DEX (découverte DEX et Paper Trading doivent être activés). Ne contourne jamais les contrôles de sécurité des tokens, la liquidité minimale ou les limites du portefeuille papier."}</p>
     {error && <div className="alert">{error}</div>}
     {notice && <div className="settings-success">{notice}</div>}
     {loading ? <div className="settings-loading">Chargement…</div> : <div className="manual-wallet-lists">
