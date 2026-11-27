@@ -3,7 +3,8 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { loadDashboardSnapshot } = require('./dashboard-data.cjs');
-const { readSettings, saveSettings } = require('./settings-store.cjs');
+const { readSettings, saveSettings, addObservedWallet, removeObservedWallet } = require('./settings-store.cjs');
+const { readManualWallets, addManualWallet, removeManualWallet } = require('./manual-wallet-store.cjs');
 
 const packagedBackendRoot = path.join(process.resourcesPath, 'backend');
 const projectRoot = process.env.BOT_PROJECT_ROOT || (app.isPackaged
@@ -14,6 +15,7 @@ const dataDirectory = process.env.BOT_DATA_DIR || path.join(runtimeDataDirectory
 const backendEntry = path.join(projectRoot, 'dist', 'index.js');
 const backendWorkingDirectory = runtimeDataDirectory;
 const backendEnvFile = path.join(backendWorkingDirectory, '.env');
+const manualPaperWalletFile = path.join(dataDirectory, 'manual-paper-wallets.json');
 const windows = new Set();
 const MAX_LOG_LINES = 300;
 let botProcess = null;
@@ -117,6 +119,34 @@ ipcMain.handle('settings:save', async (_event, input) => ({
   settings: await saveSettings(backendEnvFile, input),
   restartRequired: true,
   botRunning: botStatus.state !== 'stopped',
+}));
+ipcMain.handle('wallets:get-manual', async () => ({
+  observed: (await readSettings(backendEnvFile)).targetWallets.split(/[\\s,;]+/).filter(Boolean),
+  paper: await readManualWallets(manualPaperWalletFile),
+}));
+ipcMain.handle('wallets:add-manual', async (_event, input) => {
+  const wallet = String(input?.wallet || '').trim();
+  if (input?.mode === 'observe') {
+    const settings = await addObservedWallet(backendEnvFile, wallet);
+    return { mode: 'observe', wallets: settings.targetWallets.split(/[\\s,;]+/).filter(Boolean), restartRequired: true };
+  }
+  if (input?.mode === 'paper') {
+    const wallets = await addManualWallet(manualPaperWalletFile, wallet);
+    return { mode: 'paper', wallets, restartRequired: false };
+  }
+  throw new Error('Mode de wallet invalide.');
+});
+ipcMain.handle('wallets:remove-manual', async (_event, input) => {
+  const wallet = String(input?.wallet || '').trim();
+  if (input?.mode === 'observe') {
+    const settings = await removeObservedWallet(backendEnvFile, wallet);
+    return { mode: 'observe', wallets: settings.targetWallets.split(/[\\s,;]+/).filter(Boolean), restartRequired: true };
+  }
+  if (input?.mode === 'paper') {
+    const wallets = await removeManualWallet(manualPaperWalletFile, wallet);
+    return { mode: 'paper', wallets, restartRequired: true };
+  }
+  throw new Error('Mode de wallet invalide.');
 }));
 ipcMain.handle('bot:get-status', () => botStatus);
 ipcMain.handle('bot:get-logs', () => botLogs);
