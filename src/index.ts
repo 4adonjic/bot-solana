@@ -110,9 +110,8 @@ async function main(): Promise<void> {
       : null;
     const paperEngine = config.enablePaperTrading
       ? new PaperTradingEngine({
-          quoteProvider: jupiterQuotes
-            ? (inputMint, outputMint, amountRaw) => jupiterQuotes.getQuote(inputMint, outputMint, amountRaw)
-            : undefined,
+          quoteProvider: (inputMint, outputMint, amountRaw) =>
+            jupiterQuotes!.getQuote(inputMint, outputMint, amountRaw),
           copyDelayMs: 3_000,
           minSlippageBps: 200,
           maxSlippageBps: 500,
