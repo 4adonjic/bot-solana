@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 type Mode = "observe" | "paper";
 type WalletLists = { observed: string[]; paper: string[] };
@@ -24,7 +25,7 @@ export default function ManualWallets() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const add = async (event: React.FormEvent) => {
+  const add = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true); setError(""); setNotice("");
     try {
@@ -74,6 +75,6 @@ export default function ManualWallets() {
   </Panel>;
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return <section className="panel"><div className="panel-head"><h2>{title}</h2></div>{children}</section>;
 }
