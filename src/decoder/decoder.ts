@@ -5,6 +5,7 @@ import {
 } from "@solana/web3.js";
 import { config } from "../config/env.js";
 import { logger } from "../core/logger.js";
+import { rateLimitedRpcFetch } from "../core/rpc-fetch.js";
 import { parseTokenBalanceChanges, parseWalletTradeChanges } from "./balance-parser.js";
 import type { ParsedTrade, ParsedTransaction, TokenBalance } from "./types.js";
 
@@ -48,7 +49,7 @@ export class TransactionDecoder {
     targetWallets?: readonly string[];
   } = {}) {
     this.connection =
-      options.connection ?? new Connection(config.rpcHttpUrl, "confirmed");
+      options.connection ?? new Connection(config.rpcHttpUrl, { commitment: "confirmed", fetch: rateLimitedRpcFetch });
     this.targetWallets = [...new Set(options.targetWallets ?? config.targetWallets)];
   }
 
