@@ -35,15 +35,22 @@ export interface PaperFill {
   slippageBps: number;
   observedAt: string;
 }
+export interface WalletRanking {
+  wallet: string; quoteMint: string; rank: number | null; reliabilityScore: number | null;
+  eligible: boolean; status: "insufficient_sample" | "positive_history" | "negative_history" | "breakeven";
+  matchedSellCount: number; activeDays: number; winRatePercent: number;
+  realizedPnlRaw: string; profitFactor: string | null;
+}
 export interface Snapshot {
   generatedAt: string;
   dataDirectory: string;
   sources: { candidates: boolean; trades: boolean; watchlist: boolean; paper: boolean };
   counts: {
-    candidates: number; observedTrades: number; trackedWallets: number;
+    candidates: number; evaluatedWallets: number; observedTrades: number; trackedWallets: number;
     activeWallets: number; paperFills: number; openPositions: number;
   };
   candidates: Candidate[];
+  rankings: WalletRanking[];
   watchlist: WatchEntry[];
   trades: Array<{ wallet: string; signature: string; mint: string; side: "buy" | "sell"; observedAt: string }>;
   paper: null | { balances: Record<string, string>; positions: PaperPosition[]; fills: PaperFill[] };
