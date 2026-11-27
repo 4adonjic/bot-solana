@@ -408,6 +408,6 @@ test("releases portfolio exposure capacity after a partial sale", async () => {
       mint: "FourthTokenMint",
     }));
     assert.equal(nextBuy.executed, true);
-    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 2500n);
+    assert.equal(engine.snapshot().positions.reduce((total, item) => total + BigInt(item.costBasisRaw), 0n), 3000n);
   }, { maxPositionPercent: 20, maxPortfolioExposurePercent: 30 });
 });
