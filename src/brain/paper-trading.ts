@@ -188,11 +188,13 @@ export class PaperTradingEngine {
     if (
       !trade.wallet || !trade.signature || !trade.mint ||
       !/^\d+$/.test(trade.tokenAmountRaw) || BigInt(trade.tokenAmountRaw) <= 0n ||
-      !trade.quoteAmountRaw || !/^\d+$/.test(trade.quoteAmountRaw) || BigInt(trade.quoteAmountRaw) <= 0n ||
       !trade.quoteMint || trade.quoteDecimals === undefined ||
-      trade.quoteSource !== "token_balance" || trade.quoteAmountIsEstimate !== false
+      (!this.quoteProvider && (
+        !trade.quoteAmountRaw || !/^\d+$/.test(trade.quoteAmountRaw) || BigInt(trade.quoteAmountRaw) <= 0n ||
+        trade.quoteSource !== "token_balance" || trade.quoteAmountIsEstimate !== false
+      ))
     ) {
-      return { executed: false, reason: "missing_or_estimated_exact_quote_amount" };
+      return { executed: false, reason: this.quoteProvider ? "invalid_trade_data" : "missing_or_estimated_exact_quote_amount" };
     }
 
     const asset = this.assets.get(trade.quoteMint);
@@ -217,7 +219,7 @@ export class PaperTradingEngine {
     }
     const slippageBps = this.chooseSlippage(trade.signature);
     const sourceTokens = BigInt(trade.tokenAmountRaw);
-    const sourceQuote = trade.quoteAmountRaw && /^\\d+$/.test(trade.quoteAmountRaw)
+    const sourceQuote = trade.quoteAmountRaw && /^\d+$/.test(trade.quoteAmountRaw)
       ? BigInt(trade.quoteAmountRaw)
       : 0n;
     const currentBalance = BigInt(balances[asset.mint] ?? "0");
@@ -233,7 +235,7 @@ export class PaperTradingEngine {
       const marketSpend = budget - fee;
       if (this.quoteProvider) {
         const quote = await this.quoteProvider(asset.mint, trade.mint, marketSpend.toString());
-        if (!quote || !/^\\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
+        if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
           return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
         }
         tokenAmount = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
@@ -276,7 +278,7 @@ export class PaperTradingEngine {
       let grossProceeds: bigint;
       if (this.quoteProvider) {
         const quote = await this.quoteProvider(trade.mint, asset.mint, tokenAmount.toString());
-        if (!quote || !/^\\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
+        if (!quote || !/^\d+$/.test(quote.outAmountRaw) || BigInt(quote.outAmountRaw) <= 0n) {
           return { executed: false, reason: "fresh_jupiter_quote_unavailable" };
         }
         grossProceeds = (BigInt(quote.outAmountRaw) * BigInt(10_000 - slippageBps)) / 10_000n;
