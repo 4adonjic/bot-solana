@@ -15,13 +15,17 @@ test('loads the real persistent file formats used by the bot stores', async () =
       '[\"walletA\",\"USDC\"]': { wallet: 'walletA', quoteMint: 'USDC', reliabilityScore: 80, firstSelectedAt: '2026-01-01T00:00:00.000Z', lastSelectedAt: '2026-01-02T00:00:00.000Z', selectionCount: 1, active: true, scoreHistory: [80], trend: 'stable' },
     } }));
     await fs.writeFile(path.join(dir, 'wallet-trades.jsonl'), JSON.stringify({ wallet: 'walletA', signature: 'sigA', mint: 'mintA', side: 'buy', observedAt: '2026-01-02T00:00:00.000Z' }) + '\n');
-    await fs.writeFile(path.join(dir, 'paper-trading.json'), JSON.stringify({ version: 1, balances: {}, positions: [], fills: [] }));
+    await fs.writeFile(path.join(dir, 'paper-trading.json'), JSON.stringify({ version: 1, balances: {}, positions: [], fills: [
+      { quoteMint: 'USDC', quoteAmountRaw: '100', feeQuoteRaw: '2', slippageBps: 250, side: 'buy' },
+      { quoteMint: 'USDC', quoteAmountRaw: '120', feeQuoteRaw: '3', slippageBps: 300, side: 'sell', realizedPnlRaw: '15' },
+    ] }));
     const snapshot = await loadDashboardSnapshot(dir);
     assert.equal(snapshot.counts.candidates, 1);
     assert.equal(snapshot.counts.trackedWallets, 1);
     assert.equal(snapshot.counts.activeWallets, 1);
     assert.equal(snapshot.counts.observedTrades, 1);
     assert.equal(snapshot.sources.paper, true);
+    assert.deepEqual(snapshot.paper.performance.USDC, { realizedPnlRaw: '15', totalFeesRaw: '5', closedTrades: 1, wins: 1, losses: 0, slippageBpsTotal: 550, slippageSamples: 2, averageSlippageBps: 275 });
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 

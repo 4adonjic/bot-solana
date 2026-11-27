@@ -20,6 +20,11 @@ const money = (raw?: string, decimals = 9) => {
 const asset = (mint: string) => mint === "So11111111111111111111111111111111111111112" ? "SOL" :
   mint === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" ? "USDC" : short(mint);
 const decimals = (mint: string) => mint === "So11111111111111111111111111111111111111112" ? 9 : 6;
+const signedMoney = (raw: string, places: number) => {
+  if (!/^-?\d+$/.test(raw)) return "—";
+  const value = Number(raw) / 10 ** places;
+  return (value > 0 ? "+" : "") + value.toLocaleString("fr-FR", { maximumFractionDigits: 4 });
+};
 
 function Metric({ label, value, note }: { label: string; value: string | number; note?: string }) {
   return <article className="metric"><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</article>;
@@ -121,6 +126,14 @@ export default function App() {
         {page === "paper" && <div className="content">
           {!snapshot.paper ? <div className="alert">Aucun état Paper Trading trouvé. Active la simulation pour créer le portefeuille virtuel.</div> : <>
             <div className="metrics three"><Metric label="Fills enregistrés" value={snapshot.paper.fills.length} /><Metric label="Positions ouvertes" value={snapshot.paper.positions.length} /><Metric label="Trades observés" value={snapshot.counts.observedTrades} /></div>
+            {Object.entries(snapshot.paper.performance).map(([mint, stats]) => <Panel key={mint} title={`Performance cumulée · ${asset(mint)}`}>
+              <div className="metrics three">
+                <Metric label="P&L réalisé net" value={signedMoney(stats.realizedPnlRaw, decimals(mint)) + " " + asset(mint)} note={stats.closedTrades + " ventes clôturées"} />
+                <Metric label="Frais cumulés" value={money(stats.totalFeesRaw, decimals(mint)) + " " + asset(mint)} note="Achats et ventes simulés" />
+                <Metric label="Taux de réussite" value={stats.closedTrades ? (stats.wins / stats.closedTrades * 100).toFixed(1) + " %" : "—"} note={stats.wins + " gagnants · " + stats.losses + " perdants"} />
+                <Metric label="Slippage moyen simulé" value={stats.averageSlippageBps === null ? "—" : (stats.averageSlippageBps / 100).toFixed(2) + " %"} note={stats.slippageSamples + " fills mesurés"} />
+              </div>
+            </Panel>)}
             <Panel title="Soldes virtuels"><div className="balance-grid">{Object.entries(snapshot.paper.balances).map(([mint, raw]) => <div className="balance-card" key={mint}><span>{asset(mint)}</span><strong>{money(raw, decimals(mint))}</strong><small>Solde disponible</small></div>)}</div></Panel>
             <Panel title="Positions ouvertes"><DataTable headers={["WALLET", "TOKEN", "QUANTITÉ BRUTE", "COÛT DE REVIENT"]}>
               {snapshot.paper.positions.map((p, i) => <tr key={p.wallet + p.mint + i}><td className="mono">{short(p.wallet)}</td><td className="mono">{short(p.mint)}</td><td>{p.tokenAmountRaw}</td><td>{money(p.costBasisRaw, decimals(p.quoteMint))} {asset(p.quoteMint)}</td></tr>)}
